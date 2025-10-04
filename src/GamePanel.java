@@ -250,6 +250,9 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // วาดหน้าต่างภาพ Puzzle ตรงกลางจอเมื่อผู้เล่นกำลังตรวจสอบประตู
     private void drawPuzzleOverlay(Graphics2D g2d) {
+        if (!doorInteractionActive || activeDoor == null || activeDoor.getType() != Door.Type.PUZZLE) {
+            return;
+        }
         // สร้างพื้นหลังทึบแสงเล็กน้อยเพื่อให้ภาพ Puzzle เด่นขึ้น
         g2d.setColor(new Color(0, 0, 0, 180));
         g2d.fillRect(0, 0, panelWidth, panelHeight);
@@ -510,20 +513,20 @@ public class GamePanel extends JPanel implements ActionListener {
                 int prevLevel = (currentLevelIndex - 1 + TOTAL_LEVELS) % TOTAL_LEVELS;
                 resetForLevel(prevLevel);
             }
-        } else {
-            if (input != null) {
-                JOptionPane.showMessageDialog(this,
-                        "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
-                        "รหัสผิดพลาด",
-                        JOptionPane.WARNING_MESSAGE);
-            }
+            requestFocusInWindow();
+            return;
         }
 
-        doorInteractionActive = false;
-        activeDoor = null;
-        activePuzzleImage = null;
-        activePuzzleNumber = null;
-        requestFocusInWindow();
+        if (input != null) {
+            JOptionPane.showMessageDialog(this,
+                    "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
+                    "รหัสผิดพลาด",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+
+        pushPlayerAwayFromDoor(door);
+        clearDoorInteractionState();
+        repaint();
     }
 
     // แปลงสตริงเป็นตัวเลข ถ้าแปลงไม่ได้จะคืนค่า -1
@@ -537,12 +540,26 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ปิดหน้าต่างภาพ Puzzle และให้มอนสเตอร์กลับมาเคลื่อนไหวได้
     private void closePuzzleOverlay() {
+        clearDoorInteractionState();
+        repaint();
+    }
+
+    private void clearDoorInteractionState() {
         doorInteractionActive = false;
         activeDoor = null;
         activePuzzleImage = null;
         activePuzzleNumber = null;
-        repaint();
         requestFocusInWindow();
+    }
+
+    // ดันผู้เล่นออกจากประตูเล็กน้อยเพื่อป้องกันการชนติด
+    private void pushPlayerAwayFromDoor(Door door) {
+        if (door == null) {
+            return;
+        }
+        int doorX = door.getX(panelWidth);
+        int doorY = door.getY(panelHeight);
+        player.pushOutsideSquare(doorX, doorY, DOOR_SIZE);
     }
 
     // ตรวจว่าปุ่มที่กดเป็นปุ่มทิศทางหรือปุ่ม WASD หรือไม่

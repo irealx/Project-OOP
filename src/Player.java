@@ -248,6 +248,52 @@ public class Player {
     }
 
     /**
+     * ดันผู้เล่นให้ออกนอกพื้นที่สี่เหลี่ยมที่ระบุ (เช่น หลังยกเลิกตรวจประตู)
+     * @param rectX จุดเริ่มต้นแกน X ของพื้นที่ที่ต้องออกมา
+     * @param rectY จุดเริ่มต้นแกน Y ของพื้นที่ที่ต้องออกมา
+     * @param rectWidth ความกว้างของพื้นที่
+     * @param rectHeight ความสูงของพื้นที่
+     */
+    public void pushOutsideRect(int rectX, int rectY, int rectWidth, int rectHeight) {
+        if (!intersects(rectX, rectY, rectWidth, rectHeight)) {
+            return; // ถ้าไม่ได้ชนอยู่ก็ไม่ต้องขยับ
+        }
+
+        int playerRight = x + size;
+        int playerBottom = y + size;
+        int rectRight = rectX + rectWidth;
+        int rectBottom = rectY + rectHeight;
+
+        int overlapLeft = playerRight - rectX;
+        int overlapRight = rectRight - x;
+        int overlapTop = playerBottom - rectY;
+        int overlapBottom = rectBottom - y;
+
+        int minOverlap = Math.min(Math.min(overlapLeft, overlapRight), Math.min(overlapTop, overlapBottom));
+
+        if (minOverlap == overlapLeft) {
+            x = rectX - size - 1;
+        } else if (minOverlap == overlapRight) {
+            x = rectRight + 1;
+        } else if (minOverlap == overlapTop) {
+            y = rectY - size - 1;
+        } else {
+            y = rectBottom + 1;
+        }
+
+        x = Math.max(0, Math.min(panelWidth - size, x));
+        y = Math.max(0, Math.min(panelHeight - size, y));
+    }
+
+    /**
+     * ดันผู้เล่นออกจากสี่เหลี่ยมจัตุรัส (เช่น ประตูที่กว้างเท่ากันทุกด้าน)
+     */
+    public void pushOutsideSquare(int rectX, int rectY, int rectSize) {
+        pushOutsideRect(rectX, rectY, rectSize, rectSize);
+    }
+
+
+    /**
      * ฟังก์ชันเมื่อผู้เล่นตาย เริ่มเล่นแอนิเมชัน Death
      */
     public void die() {

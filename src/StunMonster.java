@@ -41,10 +41,10 @@ public class StunMonster extends Monster {
         // ถ้ามีคูลดาวน์หลังยิงวง (รอประมาณ 3 วิ)
         if (cooldownTick > 60) {
             cooldownTick--;
-            return; // ยังอยู่ในคูลดาวน์ ไม่ปล่อยวง
+            // หลัง stunTick หมด ให้กลับมาวิ่งตาม player ทันที ไม่หยุดนิ่ง
         }
 
-        // เคลื่อนที่เข้าหาผู้เล่นตามปกติ
+        // เคลื่อนที่เข้าหาผู้เล่นตามปกติ (จะวิ่งทันทีหลัง stunTick หมด แม้จะอยู่ในช่วง cooldown)
         moveTowardPlayer(playerX, playerY, speed);
         clampToBounds(panelWidth, panelHeight); // บังคับไม่ให้ออกนอกขอบจอ
 

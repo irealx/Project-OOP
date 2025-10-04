@@ -164,9 +164,19 @@ public class GamePanel extends JPanel implements ActionListener {
         level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
         player.spawn(); // วางผู้เล่นที่จุดเริ่มต้นกลางจอ
 
-        // ให้มอนสเตอร์แต่ละตัว spawn ถ้าด่านนั้นเป็นด่านที่มันใช้งาน
-        for (MonsterController controller : monsters) {
-            controller.prepareForLevel(levelIndex, random, panelWidth, panelHeight);
+    //  ตรวจว่าผู้เล่นโดนวงสตั้นของมอนสเตอร์ไหม
+    for (MonsterController controller : monsters) {
+        if (controller.isActive()) {
+            Monster monster = controller.getMonster();
+            if (monster instanceof StunMonster) {
+                StunMonster stun = (StunMonster) monster;
+                if (stun.isPlayerInStun(player.getX(), player.getY(), PLAYER_SIZE)) {
+                    if (!player.isStunned()) {
+                        player.applyStun(60); // สตันผู้เล่น 1 วินาที (60 เฟรม)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -185,6 +195,17 @@ public class GamePanel extends JPanel implements ActionListener {
         drawPlayer(g2d);
         drawMonsters(g2d);
         drawLighting(g2d);
+
+        // วาดวงสตั้นของ StunMonster ทับเลเยอร์ความมืด เพื่อให้เห็นเอฟเฟกต์ชัดเจน
+        for (MonsterController controller : monsters) {
+            if (controller.isActive()) {
+                Monster monster = controller.getMonster();
+                if (monster instanceof StunMonster) {
+                    ((StunMonster) monster).drawStun(g2d);
+                }
+            }
+        }
+
         drawLevelInfo(g2d);
     }
 
@@ -233,16 +254,19 @@ public class GamePanel extends JPanel implements ActionListener {
         player.draw(g2d);
     }
 
-    // วาดมอนสเตอร์        punchLight(gDark, player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS);
+    // วาดมอนสเตอร์
     private void drawMonsters(Graphics2D g2d) {
-        g2d.setColor(new Color(0xEE82EE)); // สีม่วง
         for (MonsterController controller : monsters) {
             if (controller.isActive()) { // วาดเฉพาะมอนสเตอร์ที่เปิดใช้งานในเลเวลนี้
-                Monster monster = controller.getMonster();
-                g2d.fillRect(monster.getX(), monster.getY(), monster.getSize(), monster.getSize());
+                    Monster monster = controller.getMonster();
+
+                    // วาดมอนสเตอร์เป็นสี่เหลี่ยมสีม่วง
+                    g2d.setColor(new Color(0xEE82EE));
+                    g2d.fillRect(monster.getX(), monster.getY(), monster.getSize(), monster.getSize());
+                }
             }
         }
-    }
+        
 
     // สร้างเลเยอร์ความมืดครอบทั้งแผนที่แล้วเจาะรูให้เห็นรอบตัวละคร
     private void drawLighting(Graphics2D g2d) {
@@ -534,8 +558,13 @@ public class GamePanel extends JPanel implements ActionListener {
             active = levelIndex >= 0 && levelIndex < activeLevels.length && activeLevels[levelIndex];
             if (active) {
                 monster.spawn(random, panelWidth, panelHeight);
+            // ให้เริ่มวงสตั้นทันทีหลังสปอว์น
+            if (monster instanceof StunMonster) {
+                ((StunMonster) monster).triggerStun();
+                }
             }
         }
+        
 
         // อัปเดตมอนสเตอร์แต่ละเฟรม
         private void update(int playerX, int playerY, int panelWidth, int panelHeight) {

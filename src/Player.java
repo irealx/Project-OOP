@@ -19,6 +19,9 @@ public class Player {
         RUN,    // วิ่ง
         DEATH   // ตาย
     }
+    // ตัวแปรสถานะสตัน
+    private boolean isStunned = false;   // กำลังติดสตันอยู่ไหม
+    private int stunTick = 0;            // ตัวจับเวลาสตัน (หน่วยเป็นเฟรม)
 
     private static final int FRAME_DELAY = 8; // จำนวนเฟรมก่อนเปลี่ยนภาพใหม่
 
@@ -141,6 +144,14 @@ public class Player {
             advanceAnimation();
             return;
         }
+        if (isStunned) {
+            if (stunTick > 0) {
+                stunTick--;
+            } else {
+                isStunned = false; // หมดเวลาสตัน กลับมาเคลื่อนไหวได้
+            }
+            return; //  ออกจาก update ทันที ไม่อัปเดตการเคลื่อนที่
+        }
 
         int vx = 0, vy = 0; // ความเร็วแนวนอนและแนวตั้ง
 
@@ -199,6 +210,20 @@ public class Player {
             transform.translate(-frame.getWidth() / 2, -frame.getHeight() / 2);
         }
         g2d.drawImage(frame, transform, null);
+    }
+
+    /**
+     * ฟังก์ชันใช้เมื่อตัวผู้เล่นโดนวงสตัน
+     * @param duration จำนวนเฟรมที่ผู้เล่นจะหยุดขยับ (เช่น 60 = ประมาณ 1 วินาที)
+     */
+    public void applyStun(int duration) {
+        isStunned = true;
+        stunTick = duration;
+    }
+
+    /** คืนค่าผู้เล่นกำลังโดนสตันอยู่ไหม */
+    public boolean isStunned() {
+        return isStunned;
     }
 
     /**

@@ -141,6 +141,16 @@ public class Player {
     }
 
     /**
+     * หยุดการเคลื่อนไหวทันที ใช้ตอนชนประตูเพื่อให้ผู้เล่นและมอนสเตอร์หยุดนิ่ง
+     */
+    public void stopImmediately() {
+        leftPressed = rightPressed = upPressed = downPressed = false;
+        if (state != State.DEATH) {
+            changeState(State.IDLE);
+        }
+    }
+
+    /**
      * ฟังก์ชัน update() — อัปเดตตำแหน่งและแอนิเมชันของผู้เล่นในแต่ละเฟรม
      */
     public void update() {

@@ -23,6 +23,7 @@ import java.util.Random;           // ใช้สุ่มตำแหน่ง
 import javax.swing.JPanel;         // พื้นที่หลักของเกม (Canvas)
 import javax.swing.Timer;          // ตัวจับเวลาในการอัปเดตเกมทุกเฟรม
 import javax.imageio.ImageIO;      // โหลดไฟล์ภาพจากดิสก์
+import javax.swing.JOptionPane;    // กล่องโต้ตอบสำหรับใส่รหัสผ่านประตู
 
 
 // ---------- คลาสหลักของเกม ----------
@@ -61,11 +62,15 @@ public class GamePanel extends JPanel implements ActionListener {
     private final List<MonsterController> monsters = new ArrayList<>(); // รายชื่อมอนสเตอร์
     private final List<Level> levels = new ArrayList<>();      // รายชื่อด่านทั้งหมด
 
-    // ภาพพื้นหลังที่ใช้กับทุกเลเวล
-    private final BufferedImage backgroundImage;
+    private final BufferedImage backgroundImage; // ภาพพื้นหลังที่ใช้กับทุกเลเวล
+    private final BufferedImage[] puzzleImages = loadPuzzleImages(); // ภาพ Puzzle ทั้ง 9 รูป
 
     private int currentLevelIndex = 0; // ด่านปัจจุบัน
     private Integer pendingLevelReset = null; // เก็บด่านที่จะรีเซ็ตหลังเล่นแอนิเมชันตาย
+    private boolean doorInteractionActive = false; // สถานะหยุดเกมเมื่อชนประตู
+    private Door activeDoor = null;                 // ประตูที่ผู้เล่นชนอยู่
+    private BufferedImage activePuzzleImage = null; // ภาพ Puzzle ที่กำลังเปิดให้ดู
+    private Integer activePuzzleNumber = null;      // เลขของภาพ Puzzle ที่กำลังโชว์
 
     // ---------- Constructor ----------
     public GamePanel() {
@@ -92,7 +97,15 @@ public class GamePanel extends JPanel implements ActionListener {
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                player.handleKeyPressed(e.getKeyCode()); // กดปุ่ม → ส่งให้ Player จัดการ
+                int keyCode = e.getKeyCode();
+                if (doorInteractionActive && activeDoor != null && activeDoor.getType() == Door.Type.PUZZLE) {
+                    if (isMovementKey(keyCode)) {
+                        closePuzzleOverlay();
+                    } else {
+                        return; // กดปุ่มอื่นระหว่างดูภาพไม่ให้มีผล
+                    }
+                }
+                player.handleKeyPressed(keyCode); // กดปุ่ม → ส่งให้ Player จัดการ
             }
 
             @Override
@@ -155,10 +168,28 @@ public class GamePanel extends JPanel implements ActionListener {
         }
     }
 
+    // โหลดภาพ Puzzle ทั้ง 9 รูปเก็บไว้เพื่อนำมาแสดงเมื่อชนประตูพิเศษ
+    private BufferedImage[] loadPuzzleImages() {
+        BufferedImage[] images = new BufferedImage[9];
+        for (int i = 1; i <= 9; i++) {
+            try {
+                images[i - 1] = ImageIO.read(new File(String.format("Pic/character/puzzle/pz%d.png", i)));
+            } catch (IOException e) {
+                System.err.println("ไม่สามารถโหลดภาพ puzzle หมายเลข " + i + ": " + e.getMessage());
+                images[i - 1] = null;
+            }
+        }
+        return images;
+    }
+
     // ---------- รีเซ็ตสถานะเมื่อเริ่มหรือเปลี่ยนด่าน ----------
     private void resetForLevel(int levelIndex) {
         currentLevelIndex = levelIndex; // ตั้งค่าด่านปัจจุบัน
         pendingLevelReset = null; // เคลียร์สถานะรีเซ็ตที่ค้างอยู่
+        doorInteractionActive = false; // เคลียร์สถานะหยุดเกมจากการชนประตู
+        activeDoor = null;
+        activePuzzleImage = null;
+        activePuzzleNumber = null;
         player.updateBounds(panelWidth, panelHeight); // ปรับขอบเขตของผู้เล่นให้ตรงกับขนาดจอใหม่
         Level level = levels.get(levelIndex); // ดึงด่านที่เลือกมา
         level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
@@ -197,6 +228,7 @@ public class GamePanel extends JPanel implements ActionListener {
         }
 
         drawLevelInfo(g2d);
+        drawPuzzleOverlay(g2d); // วาดภาพ Puzzle ถ้ามีการเปิดดูอยู่
     }
 
     // วาดพื้นหลังให้เต็มหน้าจอ ถ้ามีไฟล์ภาพที่โหลดได้
@@ -216,26 +248,55 @@ public class GamePanel extends JPanel implements ActionListener {
         g2d.drawString("Level " + (currentLevelIndex + 1), 20, 30); // แสดงชื่อด่านมุมซ้ายบน
     }
 
+    // วาดหน้าต่างภาพ Puzzle ตรงกลางจอเมื่อผู้เล่นกำลังตรวจสอบประตู
+    private void drawPuzzleOverlay(Graphics2D g2d) {
+        // สร้างพื้นหลังทึบแสงเล็กน้อยเพื่อให้ภาพ Puzzle เด่นขึ้น
+        g2d.setColor(new Color(0, 0, 0, 180));
+        g2d.fillRect(0, 0, panelWidth, panelHeight);
+
+        int drawY = panelHeight / 2 - 20;
+        int drawX = panelWidth / 2;
+        int drawWidth = 0;
+        int drawHeight = 0;
+
+        if (activePuzzleImage != null) {
+            int imgWidth = activePuzzleImage.getWidth();
+            int imgHeight = activePuzzleImage.getHeight();
+
+            // ปรับขนาดภาพให้ไม่ใหญ่เกินพื้นที่จอ โดยคงอัตราส่วนเดิม
+            double scale = Math.min((panelWidth - 120) / (double) imgWidth,
+                                    (panelHeight - 160) / (double) imgHeight);
+            scale = Math.min(1.0, Math.max(0.1, scale)); // ป้องกัน scale ผิดปกติ
+
+            drawWidth = (int) Math.round(imgWidth * scale);
+            drawHeight = (int) Math.round(imgHeight * scale);
+            drawX = (panelWidth - drawWidth) / 2;
+            drawY = (panelHeight - drawHeight) / 2 - 20;
+
+            g2d.drawImage(activePuzzleImage, drawX, drawY, drawWidth, drawHeight, null);
+        }
+
+        // ข้อความบอกวิธีปิดภาพหรือแจ้งเตือนถ้าไม่มีภาพ
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 24));
+        String message = activePuzzleImage != null ? "กดปุ่มทิศทางเพื่อปิดภาพ" : "ไม่พบภาพ Puzzle - กดปุ่มทิศทางเพื่อกลับ";
+        int textWidth = g2d.getFontMetrics().stringWidth(message);
+        g2d.drawString(message, (panelWidth - textWidth) / 2, drawY + drawHeight + 48);
+
+        if (activePuzzleNumber != null) {
+            String hint = "หมายเลขภาพ: " + activePuzzleNumber;
+            int hintWidth = g2d.getFontMetrics().stringWidth(hint);
+            g2d.drawString(hint, (panelWidth - hintWidth) / 2, drawY - 16);
+        }
+    }
+
     // วาดประตูทั้งหมดในด่าน
     private void drawDoors(Graphics2D g2d) {
         for (Door door : levels.get(currentLevelIndex).doors) {
             if (!isDoorVisible(door)) {
                 continue; // ไม่มีไฟส่องถึงก็ไม่วาดประตู ทำให้ผู้เล่นมองไม่เห็น
             }
-            // เปลี่ยนสีตามประเภทของประตู
-            switch (door.type) {
-                case ADVANCE: // ไปด่านต่อไป
-                    g2d.setColor(new Color(0x3CB371)); // เขียว
-                    break;
-                case BACK: // ย้อนกลับ
-                    g2d.setColor(new Color(0xCD5C5C)); // แดง
-                    break;
-                default: // NEUTRAL ไม่มีอะไรเกิดขึ้น
-                    g2d.setColor(new Color(0x4682B4)); // น้ำเงิน
-            }
-            int doorX = door.getX(panelWidth);
-            int doorY = door.getY(panelHeight);
-            g2d.fillRect(doorX, doorY, DOOR_SIZE, DOOR_SIZE); // วาดสี่เหลี่ยมแทนประตู
+            door.draw(g2d, panelWidth, panelHeight); // ใช้สไปรต์ door.png วาดประตู
         }
     }
 
@@ -337,11 +398,22 @@ public class GamePanel extends JPanel implements ActionListener {
         return dx * dx + dy * dy <= radius * radius;
     }
 
+    // อัปเดตเฟรมแอนิเมชันของประตูทุกบานในด่านปัจจุบัน
+    private void updateDoorAnimations() {
+        for (Door door : levels.get(currentLevelIndex).doors) {
+            door.updateAnimation();
+        }
+    }
+
+
     // ---------- ส่วนอัปเดตเกมแต่ละเฟรม ----------
     @Override
     public void actionPerformed(ActionEvent e) {
-        player.update(); // อัปเดตตำแหน่งของผู้เล่นจากการกดปุ่ม
+        updateDoorAnimations(); // ทำให้ประตูมีการเปลี่ยนเฟรมอยู่ตลอด
 
+        if (!doorInteractionActive || player.isDead()) {
+            player.update(); // อัปเดตตำแหน่งของผู้เล่นจากการกดปุ่ม
+        }
         if (pendingLevelReset != null && player.isDeathAnimationFinished()) {
             resetForLevel(pendingLevelReset);
             pendingLevelReset = null;
@@ -353,6 +425,12 @@ public class GamePanel extends JPanel implements ActionListener {
             repaint();
             return;
         }
+
+        if (doorInteractionActive) {
+            repaint();
+            return; // หยุดการคำนวณอื่น ๆ ขณะเปิดภาพหรือกล่องรหัสประตู
+        }
+
         // อัปเดตมอนสเตอร์แต่ละตัว
         for (MonsterController controller : monsters) {
             controller.update(player.getX(), player.getY(), panelWidth, panelHeight);
@@ -370,33 +448,113 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ---------- ตรวจการชนกับประตู ----------
     private void checkDoorCollisions() {
-        if (player.isDead()) {
+        if (player.isDead() || doorInteractionActive) {
             return;
         }
         Level level = levels.get(currentLevelIndex);
         for (Door door : level.doors) {
-            // ถ้าผู้เล่นชนประตู
             int doorX = door.getX(panelWidth);
             int doorY = door.getY(panelHeight);
             if (player.intersects(doorX, doorY, DOOR_SIZE, DOOR_SIZE)) {
-                switch (door.type) {
-                    case ADVANCE:
-                        // ไปด่านถัดไป (วนกลับถ้าถึงด่านสุดท้าย)
-                        int nextLevel = (currentLevelIndex + 1) % TOTAL_LEVELS;
-                        resetForLevel(nextLevel);
-                        break;
-                    case BACK:
-                        // ย้อนกลับด่านก่อนหน้า (วนไปด่านสุดท้ายถ้าอยู่ด่านแรก)
-                        int prevLevel = (currentLevelIndex - 1 + TOTAL_LEVELS) % TOTAL_LEVELS;
-                        resetForLevel(prevLevel);
-                        break;
-                    default:
-                        // NEUTRAL ไม่เกิดอะไรขึ้น
-                        break;
-                }
-                break; // ออกจาก loop หลังชนประตูหนึ่งบาน
+                handleDoorCollision(level, door);
+                break;
             }
         }
+    }
+
+    // จัดการเหตุการณ์เมื่อผู้เล่นชนประตูแต่ละประเภท
+    private void handleDoorCollision(Level level, Door door) {
+        doorInteractionActive = true;
+        activeDoor = door;
+        player.stopImmediately();
+
+        switch (door.getType()) {
+            case PUZZLE:
+                Integer number = door.getPuzzleNumber();
+                if (number != null && number >= 1 && number <= puzzleImages.length) {
+                    activePuzzleImage = puzzleImages[number - 1];
+                    activePuzzleNumber = number;
+                } else {
+                    activePuzzleImage = null;
+                    activePuzzleNumber = null;
+                }
+                break;
+            case ADVANCE:
+            case BACK:
+                activePuzzleImage = null;
+                activePuzzleNumber = null;
+                promptDoorPassword(level, door);
+                break;
+        }
+        repaint();
+    }
+
+    // แสดงกล่องให้ใส่รหัสผ่าน 2 หลัก ก่อนจะข้ามด่านหรือย้อนกลับ
+    private void promptDoorPassword(Level level, Door door) {
+        int password = level.getPasswordCode();
+        String formatted = String.format("%02d", password);
+        String message = "ใส่รหัสผ่าน 2 หลัก (ผลรวมของรูป Puzzle ทั้ง 4 บาน)";
+        String input = JOptionPane.showInputDialog(this, message, "รหัสประตู", JOptionPane.QUESTION_MESSAGE);
+
+        if (input != null) {
+            input = input.trim();
+        }
+
+        boolean correct = input != null && (input.equals(formatted) || parsePassword(input) == password);
+
+        if (correct) {
+            if (door.getType() == Door.Type.ADVANCE) {
+                int nextLevel = (currentLevelIndex + 1) % TOTAL_LEVELS;
+                resetForLevel(nextLevel);
+            } else {
+                int prevLevel = (currentLevelIndex - 1 + TOTAL_LEVELS) % TOTAL_LEVELS;
+                resetForLevel(prevLevel);
+            }
+        } else {
+            if (input != null) {
+                JOptionPane.showMessageDialog(this,
+                        "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
+                        "รหัสผิดพลาด",
+                        JOptionPane.WARNING_MESSAGE);
+            }
+        }
+
+        doorInteractionActive = false;
+        activeDoor = null;
+        activePuzzleImage = null;
+        activePuzzleNumber = null;
+        requestFocusInWindow();
+    }
+
+    // แปลงสตริงเป็นตัวเลข ถ้าแปลงไม่ได้จะคืนค่า -1
+    private int parsePassword(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+
+    // ปิดหน้าต่างภาพ Puzzle และให้มอนสเตอร์กลับมาเคลื่อนไหวได้
+    private void closePuzzleOverlay() {
+        doorInteractionActive = false;
+        activeDoor = null;
+        activePuzzleImage = null;
+        activePuzzleNumber = null;
+        repaint();
+        requestFocusInWindow();
+    }
+
+    // ตรวจว่าปุ่มที่กดเป็นปุ่มทิศทางหรือปุ่ม WASD หรือไม่
+    private boolean isMovementKey(int keyCode) {
+        return keyCode == KeyEvent.VK_LEFT
+                || keyCode == KeyEvent.VK_RIGHT
+                || keyCode == KeyEvent.VK_UP
+                || keyCode == KeyEvent.VK_DOWN
+                || keyCode == KeyEvent.VK_A
+                || keyCode == KeyEvent.VK_D
+                || keyCode == KeyEvent.VK_W
+                || keyCode == KeyEvent.VK_S;
     }
 
     // ---------- ตรวจเอฟเฟกต์สตันจาก StunMonster ----------
@@ -441,64 +599,58 @@ public class GamePanel extends JPanel implements ActionListener {
         }
     }
 
-    // ---------- Enum ประเภทของประตู ----------
-    private enum DoorType {
-        NEUTRAL, // ไม่มีผล
-        ADVANCE, // ไปด่านต่อไป
-        BACK     // ย้อนกลับด่าน
-    }
-
-    // ---------- คลาสย่อย Door ----------
-    private static class Door {
-        private final DoorType type; // ประเภทของประตู
-        private final double xRatio; // ตำแหน่ง X แบบสัดส่วน
-        private final double yRatio; // ตำแหน่ง Y แบบสัดส่วน
-
-        private Door(DoorType type, int x, int y, int panelWidth, int panelHeight) {
-            this.type = type;
-            int availableWidth = Math.max(1, panelWidth - DOOR_SIZE);
-            int availableHeight = Math.max(1, panelHeight - DOOR_SIZE);
-            this.xRatio = Math.max(0d, Math.min(1d, x / (double) availableWidth));
-            this.yRatio = Math.max(0d, Math.min(1d, y / (double) availableHeight));
-        }
-
-        private int getX(int panelWidth) {
-            int availableWidth = Math.max(0, panelWidth - DOOR_SIZE);
-            return Math.min(availableWidth, (int) Math.round(xRatio * availableWidth));
-        }
-
-        private int getY(int panelHeight) {
-            int availableHeight = Math.max(0, panelHeight - DOOR_SIZE);
-            return Math.min(availableHeight, (int) Math.round(yRatio * availableHeight));
-        }
-    }
-
     // ---------- คลาสย่อย Level ----------
     private static class Level {
         private List<Door> doors = new ArrayList<>();
+        private int passwordCode = 0; // ผลรวมของเลข Puzzle ทั้ง 4 บาน
 
         private Level() {}
 
-        // สุ่มประตูแต่ละบาน (ชนิด + ตำแหน่ง)
+        // สุ่มประตูแต่ละบาน (ชนิด + ตำแหน่ง) และกำหนดเลข Puzzle แบบไม่ซ้ำ
         private void randomizeDoors(Random random, int panelWidth, int panelHeight) {
-            List<DoorType> types = new ArrayList<>();
-            types.add(DoorType.ADVANCE);
-            types.add(DoorType.BACK);
+            List<Door.Type> types = new ArrayList<>();
+            types.add(Door.Type.ADVANCE);
+            types.add(Door.Type.BACK);
             // ที่เหลือเป็น NEUTRAL
             while (types.size() < DOORS_PER_LEVEL) {
-                types.add(DoorType.NEUTRAL);
+                types.add(Door.Type.PUZZLE);
             }
-            // สุ่มเรียงลำดับใหม่
+
             Collections.shuffle(types, random);
 
-            // สุ่มตำแหน่งไม่ให้ซ้ำ
             List<Point> points = generateDistinctDoorPositions(random, panelWidth, panelHeight);
             doors = new ArrayList<>();
+            passwordCode = 0;
+
+            List<Integer> puzzlePool = new ArrayList<>();
+            for (int i = 1; i <= 9; i++) {
+                puzzlePool.add(i);
+            }
+            Collections.shuffle(puzzlePool, random);
+            List<Integer> selectedNumbers = new ArrayList<>(puzzlePool.subList(0, 4));
+            int sum = 0;
+            for (int value : selectedNumbers) {
+                sum += value;
+            }
+            passwordCode = sum;
+            Collections.shuffle(selectedNumbers, random); // สุ่มลำดับการปรากฏของภาพ
+            int puzzleIndex = 0;
+
             for (int i = 0; i < DOORS_PER_LEVEL; i++) {
                 Point p = points.get(i);
-                doors.add(new Door(types.get(i), p.x, p.y, panelWidth, panelHeight));
+                Door door = new Door(types.get(i), p.x, p.y, panelWidth, panelHeight, DOOR_SIZE);
+                if (door.getType() == Door.Type.PUZZLE && puzzleIndex < selectedNumbers.size()) {
+                    int number = selectedNumbers.get(puzzleIndex++);
+                    door.setPuzzleNumber(number);
+                }
+                doors.add(door);
             }
         }
+        
+        private int getPasswordCode() {
+            return passwordCode;
+        }
+
 
         // ฟังก์ชันสร้างตำแหน่งประตูไม่ให้ทับกัน
         private List<Point> generateDistinctDoorPositions(Random random, int panelWidth, int panelHeight) {

@@ -24,8 +24,8 @@ public class Player {
 
     private final int size;         // ขนาด hitbox ของผู้เล่น (ไม่เปลี่ยน)
     private final int speed;        // ความเร็วเคลื่อนที่
-    private final int panelWidth;   // ความกว้างของฉาก
-    private final int panelHeight;  // ความสูงของฉาก
+    private int panelWidth;   // ความกว้างของฉาก
+    private int panelHeight;  // ความสูงของฉาก
     private final Color fallbackColor = new Color(0xFFD700); // สีสำรองถ้าโหลดภาพไม่ได้
 
     // อาร์เรย์เก็บเฟรมของแต่ละแอ็กชัน
@@ -50,8 +50,7 @@ public class Player {
     public Player(int size, int speed, int panelWidth, int panelHeight) {
         this.size = size;
         this.speed = speed;
-        this.panelWidth = panelWidth;
-        this.panelHeight = panelHeight;
+        updateBounds(panelWidth, panelHeight);
 
         // โหลดภาพทั้งหมด
         this.idleFrames = loadFrames("Idle", "IDLE", 4);
@@ -70,6 +69,17 @@ public class Player {
         leftPressed = rightPressed = upPressed = downPressed = false;
         facingLeft = false;
         changeState(State.IDLE);
+    }
+
+
+    /**
+     * ปรับขนาดขอบเขตการเคลื่อนที่ของผู้เล่นเมื่อพื้นที่เกมเปลี่ยนไป
+     */
+    public void updateBounds(int panelWidth, int panelHeight) {
+        this.panelWidth = Math.max(size, panelWidth);
+        this.panelHeight = Math.max(size, panelHeight);
+        x = Math.max(0, Math.min(this.panelWidth - size, x));
+        y = Math.max(0, Math.min(this.panelHeight - size, y));
     }
 
     /**
@@ -168,7 +178,7 @@ public class Player {
         }
 
         // --- เพิ่มบรรทัดนี้ ---
-        double spriteScale = 3; // ปรับขนาด sprite ให้ใหญ่ขึ้น 1.8 เท่า (สามารถปรับได้)
+        double spriteScale = 12; // ปรับขนาด sprite ให้ใหญ่ขึ้น 1.8 เท่า (สามารถปรับได้)
 
         AffineTransform transform = new AffineTransform();
 

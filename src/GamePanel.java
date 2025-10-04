@@ -28,9 +28,13 @@ import javax.imageio.ImageIO;      // โหลดไฟล์ภาพจาก
 // ---------- คลาสหลักของเกม ----------
 public class GamePanel extends JPanel implements ActionListener {
 
-    // ขนาดหน้าจอเกม
-    public static final int WIDTH = 800;
-    public static final int HEIGHT = 600;
+    // ขนาดหน้าจอเกมแบบเริ่มต้น (ใช้ในโหมดหน้าต่าง)
+    public static final int DEFAULT_WIDTH = 800;
+    public static final int DEFAULT_HEIGHT = 600;
+
+    // ขนาดจริงของพื้นที่เกม (เปลี่ยนตามโหมดหน้าต่าง/เต็มจอ)
+    private int panelWidth = DEFAULT_WIDTH;
+    private int panelHeight = DEFAULT_HEIGHT;
 
     // ขนาดและความเร็วของวัตถุต่าง ๆ
     private static final int PLAYER_SIZE = 10;
@@ -53,7 +57,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private final Random random = new Random(); // ใช้สุ่มค่าต่าง ๆ เช่น ประตู
 
     // วัตถุหลักในเกม
-    private final Player player = new Player(PLAYER_SIZE, PLAYER_SPEED, WIDTH, HEIGHT); // ผู้เล่น
+    private final Player player = new Player(PLAYER_SIZE, PLAYER_SPEED, panelWidth, panelHeight); // ผู้เล่น
     private final List<MonsterController> monsters = new ArrayList<>(); // รายชื่อมอนสเตอร์
     private final List<Level> levels = new ArrayList<>();      // รายชื่อด่านทั้งหมด
 
@@ -102,6 +106,24 @@ public class GamePanel extends JPanel implements ActionListener {
         timer.start(); // เริ่มเกม
     }
 
+    // ปรับขนาดของพื้นที่เกมให้ตรงกับหน้าจอที่ใช้งานอยู่
+    public void setGameSize(int width, int height) {
+        int minWidth = DOOR_SIZE + 100;
+        int minHeight = DOOR_SIZE + 150;
+        int newWidth = Math.max(minWidth, width);
+        int newHeight = Math.max(minHeight, height);
+
+        if (newWidth == panelWidth && newHeight == panelHeight) {
+            return;
+        }
+
+        panelWidth = newWidth;
+        panelHeight = newHeight;
+        resetForLevel(currentLevelIndex);
+        revalidate();
+        repaint();
+    }
+
     // เมื่อ JPanel ถูกเพิ่มเข้า JFrame แล้ว จะเรียกเมธอดนี้อัตโนมัติ
     @Override
     public void addNotify() {
@@ -137,13 +159,14 @@ public class GamePanel extends JPanel implements ActionListener {
     private void resetForLevel(int levelIndex) {
         currentLevelIndex = levelIndex; // ตั้งค่าด่านปัจจุบัน
         pendingLevelReset = null; // เคลียร์สถานะรีเซ็ตที่ค้างอยู่
+        player.updateBounds(panelWidth, panelHeight); // ปรับขอบเขตของผู้เล่นให้ตรงกับขนาดจอใหม่
         Level level = levels.get(levelIndex); // ดึงด่านที่เลือกมา
-        level.randomizeDoors(random); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
+        level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
         player.spawn(); // วางผู้เล่นที่จุดเริ่มต้นกลางจอ
 
         // ให้มอนสเตอร์แต่ละตัว spawn ถ้าด่านนั้นเป็นด่านที่มันใช้งาน
         for (MonsterController controller : monsters) {
-            controller.prepareForLevel(levelIndex, random, WIDTH, HEIGHT);
+            controller.prepareForLevel(levelIndex, random, panelWidth, panelHeight);
         }
     }
 
@@ -168,10 +191,10 @@ public class GamePanel extends JPanel implements ActionListener {
     // วาดพื้นหลังให้เต็มหน้าจอ ถ้ามีไฟล์ภาพที่โหลดได้
     private void drawBackground(Graphics2D g2d) {
         if (backgroundImage != null) {
-            g2d.drawImage(backgroundImage, 0, 0, WIDTH, HEIGHT, null); // ขยายภาพให้เต็มพื้นที่เกม
+            g2d.drawImage(backgroundImage, 0, 0, panelWidth, panelHeight, null); // ขยายภาพให้เต็มพื้นที่เกม
         } else {
             g2d.setColor(Color.BLACK); // สำรอง: ถ้าโหลดภาพไม่ได้ให้พื้นหลังเป็นสีดำ
-            g2d.fillRect(0, 0, WIDTH, HEIGHT);
+            g2d.fillRect(0, 0, panelWidth, panelHeight);
         }
     }
 
@@ -199,7 +222,9 @@ public class GamePanel extends JPanel implements ActionListener {
                 default: // NEUTRAL ไม่มีอะไรเกิดขึ้น
                     g2d.setColor(new Color(0x4682B4)); // น้ำเงิน
             }
-            g2d.fillRect(door.x, door.y, DOOR_SIZE, DOOR_SIZE); // วาดสี่เหลี่ยมแทนประตู
+            int doorX = door.getX(panelWidth);
+            int doorY = door.getY(panelHeight);
+            g2d.fillRect(doorX, doorY, DOOR_SIZE, DOOR_SIZE); // วาดสี่เหลี่ยมแทนประตู
         }
     }
 
@@ -221,12 +246,12 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // สร้างเลเยอร์ความมืดครอบทั้งแผนที่แล้วเจาะรูให้เห็นรอบตัวละคร
     private void drawLighting(Graphics2D g2d) {
-        BufferedImage darkness = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage darkness = new BufferedImage(panelWidth, panelHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D gDark = darkness.createGraphics();
 
         gDark.setComposite(AlphaComposite.Src); // เริ่มด้วยการวาดทับทั้งหมด
         gDark.setColor(new Color(0, 0, 0, 230)); // สีดำโปร่งใสบางส่วนเพื่อให้รู้สึกว่ามืด
-        gDark.fillRect(0, 0, WIDTH, HEIGHT);
+        gDark.fillRect(0, 0, panelWidth, panelHeight);
 
         // เปิดไฟรอบผู้เล่น
         punchLight(gDark, player.getCenterX(), player.getCenterY(), PLAYER_LIGHT_RADIUS);
@@ -268,8 +293,8 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ตรวจว่าประตูอยู่ในรัศมีไฟของผู้เล่นหรือมอนสเตอร์หรือไม่
     private boolean isDoorVisible(Door door) {
-        int centerX = door.x + DOOR_SIZE / 2;
-        int centerY = door.y + DOOR_SIZE / 2;
+        int centerX = door.getX(panelWidth) + DOOR_SIZE / 2;
+        int centerY = door.getY(panelHeight) + DOOR_SIZE / 2;
 
         if (isPointLit(centerX, centerY, player.getCenterX(),
                 player.getCenterY(), PLAYER_LIGHT_RADIUS)) {
@@ -316,7 +341,7 @@ public class GamePanel extends JPanel implements ActionListener {
         }
         // อัปเดตมอนสเตอร์แต่ละตัว
         for (MonsterController controller : monsters) {
-            controller.update(player.getX(), player.getY(), WIDTH, HEIGHT);
+            controller.update(player.getX(), player.getY(), panelWidth, panelHeight);
         }
 
         // ตรวจการชนกับประตูและมอนสเตอร์
@@ -334,7 +359,9 @@ public class GamePanel extends JPanel implements ActionListener {
         Level level = levels.get(currentLevelIndex);
         for (Door door : level.doors) {
             // ถ้าผู้เล่นชนประตู
-            if (player.intersects(door.x, door.y, DOOR_SIZE, DOOR_SIZE)) {
+            int doorX = door.getX(panelWidth);
+            int doorY = door.getY(panelHeight);
+            if (player.intersects(doorX, doorY, DOOR_SIZE, DOOR_SIZE)) {
                 switch (door.type) {
                     case ADVANCE:
                         // ไปด่านถัดไป (วนกลับถ้าถึงด่านสุดท้าย)
@@ -384,13 +411,25 @@ public class GamePanel extends JPanel implements ActionListener {
     // ---------- คลาสย่อย Door ----------
     private static class Door {
         private final DoorType type; // ประเภทของประตู
-        private final int x;         // ตำแหน่ง X
-        private final int y;         // ตำแหน่ง Y
+        private final double xRatio; // ตำแหน่ง X แบบสัดส่วน
+        private final double yRatio; // ตำแหน่ง Y แบบสัดส่วน
 
-        private Door(DoorType type, int x, int y) {
+        private Door(DoorType type, int x, int y, int panelWidth, int panelHeight) {
             this.type = type;
-            this.x = x;
-            this.y = y;
+            int availableWidth = Math.max(1, panelWidth - DOOR_SIZE);
+            int availableHeight = Math.max(1, panelHeight - DOOR_SIZE);
+            this.xRatio = Math.max(0d, Math.min(1d, x / (double) availableWidth));
+            this.yRatio = Math.max(0d, Math.min(1d, y / (double) availableHeight));
+        }
+
+        private int getX(int panelWidth) {
+            int availableWidth = Math.max(0, panelWidth - DOOR_SIZE);
+            return Math.min(availableWidth, (int) Math.round(xRatio * availableWidth));
+        }
+
+        private int getY(int panelHeight) {
+            int availableHeight = Math.max(0, panelHeight - DOOR_SIZE);
+            return Math.min(availableHeight, (int) Math.round(yRatio * availableHeight));
         }
     }
 
@@ -401,7 +440,7 @@ public class GamePanel extends JPanel implements ActionListener {
         private Level() {}
 
         // สุ่มประตูแต่ละบาน (ชนิด + ตำแหน่ง)
-        private void randomizeDoors(Random random) {
+        private void randomizeDoors(Random random, int panelWidth, int panelHeight) {
             List<DoorType> types = new ArrayList<>();
             types.add(DoorType.ADVANCE);
             types.add(DoorType.BACK);
@@ -413,24 +452,27 @@ public class GamePanel extends JPanel implements ActionListener {
             Collections.shuffle(types, random);
 
             // สุ่มตำแหน่งไม่ให้ซ้ำ
-            List<Point> points = generateDistinctDoorPositions(random);
+            List<Point> points = generateDistinctDoorPositions(random, panelWidth, panelHeight);
             doors = new ArrayList<>();
             for (int i = 0; i < DOORS_PER_LEVEL; i++) {
                 Point p = points.get(i);
-                doors.add(new Door(types.get(i), p.x, p.y));
+                doors.add(new Door(types.get(i), p.x, p.y, panelWidth, panelHeight));
             }
         }
 
         // ฟังก์ชันสร้างตำแหน่งประตูไม่ให้ทับกัน
-        private List<Point> generateDistinctDoorPositions(Random random) {
+        private List<Point> generateDistinctDoorPositions(Random random, int panelWidth, int panelHeight) {
             List<Point> points = new ArrayList<>();
             int attempts = 0;
 
             // สุ่มพิกัดจนกว่าจะได้ครบหรือครบจำนวนครั้งสูงสุด
             while (points.size() < DOORS_PER_LEVEL && attempts < 10_000) {
                 attempts++;
-                int x = 50 + random.nextInt(WIDTH - 100 - DOOR_SIZE);
-                int y = 80 + random.nextInt(HEIGHT - 150 - DOOR_SIZE);
+                int xRange = Math.max(1, panelWidth - 100 - DOOR_SIZE);
+                int yRange = Math.max(1, panelHeight - 150 - DOOR_SIZE);
+
+                int x = 50 + random.nextInt(xRange);
+                int y = 80 + random.nextInt(yRange);
                 Point candidate = new Point(x, y);
 
                 boolean overlaps = false;
@@ -449,7 +491,9 @@ public class GamePanel extends JPanel implements ActionListener {
 
             // ถ้ายังไม่ครบ ให้เติม dummy door
             while (points.size() < DOORS_PER_LEVEL) {
-                points.add(new Point(60 * points.size(), 100));
+                int fallbackX = Math.min(panelWidth - DOOR_SIZE, 60 * points.size());
+                int fallbackY = Math.min(panelHeight - DOOR_SIZE, 100 + 40 * points.size());
+                points.add(new Point(Math.max(0, fallbackX), Math.max(0, fallbackY)));
             }
             return points;
         }

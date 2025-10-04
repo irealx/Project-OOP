@@ -12,7 +12,8 @@ import javax.swing.JFrame;
 public class GameFrame extends JFrame {
 
     private boolean fullscreen = false; // ตัวแปรบอกสถานะว่าอยู่โหมดเต็มจอไหม
-    private final Dimension windowedSize = new Dimension(GamePanel.WIDTH, GamePanel.HEIGHT); // ขนาดโหมดปกติ
+    private final GamePanel panel; // พาเนลหลักของเกมที่ต้องขยาย/ย่อ
+    private final Dimension windowedSize = new Dimension(GamePanel.DEFAULT_WIDTH, GamePanel.DEFAULT_HEIGHT); // ขนาดโหมดปกติ
 
     // Constructor ของ GameFrame (สร้างหน้าต่างเกม)
     public GameFrame() {
@@ -22,7 +23,7 @@ public class GameFrame extends JFrame {
         setResizable(false); // ปิดการปรับขนาดหน้าต่าง
 
         // สร้าง panel หลักของเกม (จอที่แสดงภาพและอัปเดตเกม)
-        GamePanel panel = new GamePanel();
+        panel = new GamePanel();
         panel.setPreferredSize(windowedSize); // ตั้งขนาดเริ่มต้นของหน้าต่าง
 
         // เพิ่ม panel เข้าสู่หน้าต่าง
@@ -30,7 +31,6 @@ public class GameFrame extends JFrame {
 
         pack(); // ปรับขนาดเฟรมให้พอดีกับคอนเทนต์ภายใน
         setLocationRelativeTo(null); // จัดให้อยู่ตรงกลางหน้าจอ
-        setVisible(true); // แสดงหน้าต่าง
 
         // เพิ่ม KeyListener เพื่อจับการกดปุ่ม F11
         addKeyListener(new KeyAdapter() {
@@ -41,6 +41,9 @@ public class GameFrame extends JFrame {
                 }
             }
         });
+
+        fullscreen = true; // เปิดเกมในโหมดเต็มจอทันทีที่เริ่มต้น
+        applyFullscreenState();
     }
 
     /**
@@ -48,6 +51,10 @@ public class GameFrame extends JFrame {
      */
     private void toggleFullscreen() {
         fullscreen = !fullscreen; // สลับสถานะ (true <-> false)
+        applyFullscreenState();
+    }
+
+    private void applyFullscreenState() {
         dispose(); // ปิดหน้าต่างชั่วคราวก่อนเปลี่ยนโหมด (จำเป็นใน Swing)
 
         if (fullscreen) {
@@ -55,14 +62,16 @@ public class GameFrame extends JFrame {
             setUndecorated(true); // ซ่อน title bar
             setExtendedState(JFrame.MAXIMIZED_BOTH); // ขยายเต็มจอ
             Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-            getContentPane().setPreferredSize(screen); // panel ขยายเท่าหน้าจอ
+            panel.setPreferredSize(screen); // panel ขยายเท่าหน้าจอ
+            panel.setGameSize(screen.width, screen.height);
         } else {
             // ---------- กลับสู่โหมดปกติ ----------
             setUndecorated(false); // แสดง title bar กลับมา
             setExtendedState(JFrame.NORMAL); // คืนขนาดเดิม
-            getContentPane().setPreferredSize(windowedSize); // panel กลับขนาดเดิม
+            panel.setPreferredSize(windowedSize); // panel กลับขนาดเดิม
+            panel.setGameSize(windowedSize.width, windowedSize.height);
         }
-
+        setContentPane(panel); // ใส่ panel กลับเข้าเฟรมอีกครั้งหลัง dispose
         pack(); // ปรับขนาดใหม่ให้พอดี
         setLocationRelativeTo(null); // จัดให้อยู่กลางจอ
         setVisible(true); // แสดงอีกครั้ง

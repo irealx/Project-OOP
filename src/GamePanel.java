@@ -278,19 +278,6 @@ public class GamePanel extends JPanel implements ActionListener {
 
             g2d.drawImage(activePuzzleImage, drawX, drawY, drawWidth, drawHeight, null);
         }
-
-        // ข้อความบอกวิธีปิดภาพหรือแจ้งเตือนถ้าไม่มีภาพ
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 24));
-        String message = activePuzzleImage != null ? "กดปุ่มทิศทางเพื่อปิดภาพ" : "ไม่พบภาพ Puzzle - กดปุ่มทิศทางเพื่อกลับ";
-        int textWidth = g2d.getFontMetrics().stringWidth(message);
-        g2d.drawString(message, (panelWidth - textWidth) / 2, drawY + drawHeight + 48);
-
-        if (activePuzzleNumber != null) {
-            String hint = "หมายเลขภาพ: " + activePuzzleNumber;
-            int hintWidth = g2d.getFontMetrics().stringWidth(hint);
-            g2d.drawString(hint, (panelWidth - hintWidth) / 2, drawY - 16);
-        }
     }
 
     // วาดประตูทั้งหมดในด่าน
@@ -496,7 +483,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private void promptDoorPassword(Level level, Door door) {
         int password = level.getPasswordCode();
         String formatted = String.format("%02d", password);
-        String message = "ใส่รหัสผ่าน 2 หลัก (ผลรวมของรูป Puzzle ทั้ง 4 บาน)";
+        String message = "Please enter password";
         String input = JOptionPane.showInputDialog(this, message, "รหัสประตู", JOptionPane.QUESTION_MESSAGE);
 
         if (input != null) {
@@ -540,6 +527,8 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ปิดหน้าต่างภาพ Puzzle และให้มอนสเตอร์กลับมาเคลื่อนไหวได้
     private void closePuzzleOverlay() {
+        // ดันผู้เล่นออกจากประตูเพื่อไม่ให้ชนซ้ำทันทีเมื่อกลับมาเดินต่อ
+        pushPlayerAwayFromDoor(activeDoor);
         clearDoorInteractionState();
         repaint();
     }

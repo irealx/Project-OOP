@@ -164,21 +164,11 @@ public class GamePanel extends JPanel implements ActionListener {
         level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
         player.spawn(); // วางผู้เล่นที่จุดเริ่มต้นกลางจอ
 
-    //  ตรวจว่าผู้เล่นโดนวงสตั้นของมอนสเตอร์ไหม
-    for (MonsterController controller : monsters) {
-        if (controller.isActive()) {
-            Monster monster = controller.getMonster();
-            if (monster instanceof StunMonster) {
-                StunMonster stun = (StunMonster) monster;
-                if (stun.isPlayerInStun(player.getX(), player.getY(), PLAYER_SIZE)) {
-                    if (!player.isStunned()) {
-                        player.applyStun(60); // สตันผู้เล่น 1 วินาที (60 เฟรม)
-                        }
-                    }
-                }
+        // เตรียมมอนสเตอร์ทั้งหมดให้พร้อมสำหรับด่านใหม่
+        for (MonsterController controller : monsters) {
+            controller.prepareForLevel(levelIndex, random, panelWidth, panelHeight);
             }
         }
-    }
 
 
     // ---------- ส่วนวาดกราฟิก ----------
@@ -368,6 +358,9 @@ public class GamePanel extends JPanel implements ActionListener {
             controller.update(player.getX(), player.getY(), panelWidth, panelHeight);
         }
 
+        // หลังอัปเดตมอนสเตอร์ เช็กว่าผู้เล่นโดนวงสตันหรือไม่
+        updateStunEffects();
+
         // ตรวจการชนกับประตูและมอนสเตอร์
         checkDoorCollisions();
         checkMonsterCollisions();
@@ -402,6 +395,29 @@ public class GamePanel extends JPanel implements ActionListener {
                         break;
                 }
                 break; // ออกจาก loop หลังชนประตูหนึ่งบาน
+            }
+        }
+    }
+
+    // ---------- ตรวจเอฟเฟกต์สตันจาก StunMonster ----------
+    private void updateStunEffects() {
+        if (player.isDead()) {
+            return;
+        }
+
+        for (MonsterController controller : monsters) {
+            if (!controller.isActive()) {
+                continue;
+            }
+
+            Monster monster = controller.getMonster();
+            if (monster instanceof StunMonster) {
+                StunMonster stunMonster = (StunMonster) monster;
+
+                // ถ้าผู้เล่นยืนอยู่ในวงสตันและยังไม่โดนสตันมาก่อน ให้ล็อกการเคลื่อนไหวทันที
+                if (stunMonster.isPlayerInStun(player.getX(), player.getY(), PLAYER_SIZE) && !player.isStunned()) {
+                    player.applyStun(stunMonster.getStunDurationTicks());
+                }
             }
         }
     }
@@ -558,9 +574,9 @@ public class GamePanel extends JPanel implements ActionListener {
             active = levelIndex >= 0 && levelIndex < activeLevels.length && activeLevels[levelIndex];
             if (active) {
                 monster.spawn(random, panelWidth, panelHeight);
-            // ให้เริ่มวงสตั้นทันทีหลังสปอว์น
-            if (monster instanceof StunMonster) {
-                ((StunMonster) monster).triggerStun();
+                // ให้เริ่มวงสตั้นทันทีหลังสปอว์น เพื่อให้ผู้เล่นเห็นการทำงาน
+                if (monster instanceof StunMonster) {
+                    ((StunMonster) monster).triggerStun();
                 }
             }
         }

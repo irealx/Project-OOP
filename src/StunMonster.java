@@ -1,4 +1,3 @@
-// วางไว้บนสุดของไฟล์ StunMonster.java (เพิ่มจากเดิม)
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -7,7 +6,7 @@ import java.awt.Graphics2D;
 // มอนสเตอร์พื้นฐานที่แค่เคลื่อนเข้าหาผู้เล่น
 public class StunMonster extends Monster {
     private final int speed; // ความเร็วคงที่ของมอนสเตอร์
-    private final int stunDurationTicks = 60;     // ระยะเวลาของวงสตั้น (ประมาณ 1 วินาที หากเฟรม ~60fps)
+    private final int stunDurationTicks = 60;     // ระยะเวลาที่ผู้เล่นจะโดนสตัน (ประมาณ 1 วินาทีหากเฟรม ~60fps)
     private final int stunCooldownTicks = 180;    // คูลดาวน์ก่อนยิงวงครั้งต่อไป (~3 วินาที)
     private final int ringMaxRadius = 480;        // รัศมีสูงสุดของวงสตั้น
     private final int ringThickness = 10;            // ความหนาของวงสตั้น (ใช้คำนวณว่าผู้เล่นอยู่ในวงหรือไม่)
@@ -71,38 +70,38 @@ public class StunMonster extends Monster {
     public void drawStun(Graphics2D g2d) {
     if (stunTick <= 0) return; // ถ้าไม่มีวงสตันทำงานอยู่ ให้ข้ามเลย
 
-    // คำนวณความคืบหน้าของแอนิเมชัน (0.0 → 1.0)
-    float progress = 1.0f - ((float) stunTick / (float) stunDurationTicks);
+        // คำนวณความคืบหน้าของแอนิเมชัน (0.0 → 1.0)
+        float progress = 1.0f - ((float) stunTick / (float) stunDurationTicks);
 
-    // คำนวณรัศมีของวงจาก progress
-    int minRadius = getSize() / 2 + 6; // เริ่มจากรอบ ๆ ตัวมอน
-    int radius = (int) (minRadius + (ringMaxRadius - minRadius) * progress);
+        // คำนวณรัศมีของวงจาก progress
+        int minRadius = getSize() / 2 + 6; // เริ่มจากรอบ ๆ ตัวมอนสเตอร์
+        int radius = (int) (minRadius + (ringMaxRadius - minRadius) * progress);
 
-    // ความโปร่งใส (เริ่มชัดแล้วจางลง)
-    float alpha = Math.max(0.0f, 0.6f * (1.0f - progress));
+        // ความโปร่งใส (เริ่มชัดแล้วจางลง)
+        float alpha = Math.max(0.0f, 0.6f * (1.0f - progress));
 
-    // จุดศูนย์กลางวง
-    int cx = getX() + getSize() / 2;
-    int cy = getY() + getSize() / 2;
+        // จุดศูนย์กลางวง
+            int cx = getX() + getSize() / 2;
+        int cy = getY() + getSize() / 2;
 
-    // เก็บสถานะเดิมของ g2d
-    var oldComposite = g2d.getComposite();
-    var oldStroke = g2d.getStroke();
-    var oldColor = g2d.getColor();
+        // เก็บสถานะเดิมของ g2d
+        var oldComposite = g2d.getComposite();
+        var oldStroke = g2d.getStroke();
+        var oldColor = g2d.getColor();
 
-    // ตั้งค่าการวาดวง
-    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-    g2d.setColor(new Color(100, 200, 255)); // สีฟ้าอ่อน
-    g2d.setStroke(new BasicStroke(8)); // ความหนาเส้น
+        // ตั้งค่าการวาดวง
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+        g2d.setColor(new Color(100, 200, 255)); // สีฟ้าอ่อน
+        g2d.setStroke(new BasicStroke(8)); // ความหนาเส้น
 
-    // วาดวงกลมรอบตัวมอน
-    int d = radius * 2;
-    g2d.drawOval(cx - radius, cy - radius, d, d);
+        // วาดวงกลมรอบตัวมอน
+        int d = radius * 2;
+        g2d.drawOval(cx - radius, cy - radius, d, d);
 
-    // คืนค่าการตั้งค่าเดิม
-    g2d.setComposite(oldComposite);
-    g2d.setStroke(oldStroke);
-    g2d.setColor(oldColor);
+        // คืนค่าการตั้งค่าเดิม
+        g2d.setComposite(oldComposite);
+        g2d.setStroke(oldStroke);
+        g2d.setColor(oldColor);
     }
 
     /**
@@ -145,6 +144,11 @@ public class StunMonster extends Monster {
         int outer = radius + ringThickness;
 
         // คืนค่า true ถ้าผู้เล่นอยู่ในบริเวณของวง
-        return dist2 >= inner * inner && dist2 <= outer * outer; 
+        return dist2 >= inner * inner && dist2 <= outer * outer;
+    }
+
+    /** คืนค่าระยะเวลาสตันเป็นจำนวนเฟรม เพื่อให้ฝั่งผู้เล่นใช้งาน */
+    public int getStunDurationTicks() {
+        return stunDurationTicks;
     }
 }

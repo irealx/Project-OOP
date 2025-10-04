@@ -72,6 +72,10 @@ public class Player {
         leftPressed = rightPressed = upPressed = downPressed = false;
         facingLeft = false;
         changeState(State.IDLE);
+
+        // เคลียร์สถานะสตันเผื่อว่ามีการรีเซ็ตด่านใหม่
+        isStunned = false;
+        stunTick = 0;
     }
 
 

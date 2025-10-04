@@ -177,27 +177,27 @@ public class Player {
             return;
         }
 
-        // --- เพิ่มบรรทัดนี้ ---
-        double spriteScale = 12; // ปรับขนาด sprite ให้ใหญ่ขึ้น 1.8 เท่า (สามารถปรับได้)
+        // ปรับขนาด sprite ที่แสดงผล (เช่น 1.5 เท่า)
+        double spriteScale = 12; // ปรับค่านี้เพื่อเพิ่ม/ลดขนาด sprite
+        double scaleX = spriteScale * size / frame.getWidth();
+        double scaleY = spriteScale * size / frame.getHeight();
 
+        // สร้าง AffineTransform เพื่อจัดตำแหน่ง sprite ให้อยู่กลาง object player
         AffineTransform transform = new AffineTransform();
-
-        // คำนวณอัตราส่วนการขยาย (hitbox = ขนาดจริงในเกม)
-        double scaleX = (double) size * spriteScale / frame.getWidth();
-        double scaleY = (double) size * spriteScale / frame.getHeight();
-
-        // เพื่อให้ sprite อยู่ตรงกลาง hitbox ต้องเลื่อนพิกัดก่อนวาด
-        int offsetX = (int) ((frame.getWidth() * scaleX - size) / 2);
-        int offsetY = (int) ((frame.getHeight() * scaleY - size) / 2);
+        int centerX = x + size / 2;
+        int centerY = y + size / 2;
 
         if (facingLeft) {
-            transform.translate(x + size - offsetX, y - offsetY);
-            transform.scale(-scaleX, scaleY);
+            // กลับ sprite ทางซ้าย และจัดให้อยู่กลาง object player
+            transform.translate(centerX, centerY);
+            transform.scale(-scaleX, scaleY); // scaleX ติดลบเพื่อกลับด้าน
+            transform.translate(-frame.getWidth() / 2, -frame.getHeight() / 2);
         } else {
-            transform.translate(x - offsetX, y - offsetY);
+            // sprite ปกติและอยู่กลาง object player
+            transform.translate(centerX, centerY);
             transform.scale(scaleX, scaleY);
+            transform.translate(-frame.getWidth() / 2, -frame.getHeight() / 2);
         }
-
         g2d.drawImage(frame, transform, null);
     }
 

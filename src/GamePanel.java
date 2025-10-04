@@ -33,7 +33,7 @@ public class GamePanel extends JPanel implements ActionListener {
     public static final int HEIGHT = 600;
 
     // ขนาดและความเร็วของวัตถุต่าง ๆ
-    private static final int PLAYER_SIZE = 32;
+    private static final int PLAYER_SIZE = 10;
     private static final int MONSTER_SIZE = 32;
     private static final int DOOR_SIZE = 48;
     private static final int PLAYER_SPEED = 4;
@@ -53,7 +53,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private final Random random = new Random(); // ใช้สุ่มค่าต่าง ๆ เช่น ประตู
 
     // วัตถุหลักในเกม
-    private final Player player = new Player();                // ผู้เล่น
+    private final Player player = new Player(PLAYER_SIZE, PLAYER_SPEED, WIDTH, HEIGHT); // ผู้เล่น
     private final List<MonsterController> monsters = new ArrayList<>(); // รายชื่อมอนสเตอร์
     private final List<Level> levels = new ArrayList<>();      // รายชื่อด่านทั้งหมด
 
@@ -61,6 +61,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private final BufferedImage backgroundImage;
 
     private int currentLevelIndex = 0; // ด่านปัจจุบัน
+    private Integer pendingLevelReset = null; // เก็บด่านที่จะรีเซ็ตหลังเล่นแอนิเมชันตาย
 
     // ---------- Constructor ----------
     public GamePanel() {
@@ -135,6 +136,7 @@ public class GamePanel extends JPanel implements ActionListener {
     // ---------- รีเซ็ตสถานะเมื่อเริ่มหรือเปลี่ยนด่าน ----------
     private void resetForLevel(int levelIndex) {
         currentLevelIndex = levelIndex; // ตั้งค่าด่านปัจจุบัน
+        pendingLevelReset = null; // เคลียร์สถานะรีเซ็ตที่ค้างอยู่
         Level level = levels.get(levelIndex); // ดึงด่านที่เลือกมา
         level.randomizeDoors(random); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
         player.spawn(); // วางผู้เล่นที่จุดเริ่มต้นกลางจอ
@@ -159,7 +161,7 @@ public class GamePanel extends JPanel implements ActionListener {
         drawDoors(g2d);
         drawPlayer(g2d);
         drawMonsters(g2d);
-                drawLighting(g2d);
+        drawLighting(g2d);
         drawLevelInfo(g2d);
     }
 
@@ -203,11 +205,10 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // วาดผู้เล่น
     private void drawPlayer(Graphics2D g2d) {
-        g2d.setColor(new Color(0xFFD700)); // สีทอง
-        g2d.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
+        player.draw(g2d);
     }
 
-    // วาดมอนสเตอร์
+    // วาดมอนสเตอร์        punchLight(gDark, player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS);
     private void drawMonsters(Graphics2D g2d) {
         g2d.setColor(new Color(0xEE82EE)); // สีม่วง
         for (MonsterController controller : monsters) {
@@ -228,7 +229,7 @@ public class GamePanel extends JPanel implements ActionListener {
         gDark.fillRect(0, 0, WIDTH, HEIGHT);
 
         // เปิดไฟรอบผู้เล่น
-        punchLight(gDark, player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS);
+        punchLight(gDark, player.getCenterX(), player.getCenterY(), PLAYER_LIGHT_RADIUS);
 
         // เปิดไฟรอบมอนสเตอร์ที่ยังทำงานอยู่
         for (MonsterController controller : monsters) {
@@ -270,8 +271,8 @@ public class GamePanel extends JPanel implements ActionListener {
         int centerX = door.x + DOOR_SIZE / 2;
         int centerY = door.y + DOOR_SIZE / 2;
 
-        if (isPointLit(centerX, centerY, player.x + PLAYER_SIZE / 2,
-                player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS)) {
+        if (isPointLit(centerX, centerY, player.getCenterX(),
+                player.getCenterY(), PLAYER_LIGHT_RADIUS)) {
             return true; // ไฟจากผู้เล่นถึง
         }
 
@@ -302,9 +303,20 @@ public class GamePanel extends JPanel implements ActionListener {
     public void actionPerformed(ActionEvent e) {
         player.update(); // อัปเดตตำแหน่งของผู้เล่นจากการกดปุ่ม
 
+        if (pendingLevelReset != null && player.isDeathAnimationFinished()) {
+            resetForLevel(pendingLevelReset);
+            pendingLevelReset = null;
+            repaint();
+            return;
+        }
+
+        if (player.isDead()) {
+            repaint();
+            return;
+        }
         // อัปเดตมอนสเตอร์แต่ละตัว
         for (MonsterController controller : monsters) {
-            controller.update(player.x, player.y, WIDTH, HEIGHT);
+            controller.update(player.getX(), player.getY(), WIDTH, HEIGHT);
         }
 
         // ตรวจการชนกับประตูและมอนสเตอร์
@@ -316,6 +328,9 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ---------- ตรวจการชนกับประตู ----------
     private void checkDoorCollisions() {
+        if (player.isDead()) {
+            return;
+        }
         Level level = levels.get(currentLevelIndex);
         for (Door door : level.doors) {
             // ถ้าผู้เล่นชนประตู
@@ -342,13 +357,17 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // ---------- ตรวจการชนกับมอนสเตอร์ ----------
     private void checkMonsterCollisions() {
+        if (player.isDead()) {
+            return;
+        }
         for (MonsterController controller : monsters) {
             if (controller.isActive()) {
                 Monster monster = controller.getMonster();
                 if (player.intersects(monster.getX(), monster.getY(),
                                       monster.getSize(), monster.getSize())) {
-                    // ถ้าโดนมอนสเตอร์ → รีเซ็ตกลับไปด่านแรก
-                    resetForLevel(0);
+                    // ถ้าโดนมอนสเตอร์ → เล่นแอนิเมชันตายก่อนรีเซ็ต
+                    player.die();
+                    pendingLevelReset = 0;
                     break;
                 }
             }
@@ -433,60 +452,6 @@ public class GamePanel extends JPanel implements ActionListener {
                 points.add(new Point(60 * points.size(), 100));
             }
             return points;
-        }
-    }
-
-    // ---------- คลาสผู้เล่น ----------
-    private static class Player {
-        private int x, y; // ตำแหน่งของผู้เล่น
-        private boolean leftPressed, rightPressed, upPressed, downPressed; // ปุ่มที่ถูกกด
-
-        // spawn ผู้เล่นกลางจอ
-        private void spawn() {
-            x = WIDTH / 2 - PLAYER_SIZE / 2;
-            y = HEIGHT / 2 - PLAYER_SIZE / 2;
-            leftPressed = rightPressed = upPressed = downPressed = false;
-        }
-
-        // เมื่อกดปุ่ม
-        private void handleKeyPressed(int keyCode) {
-            if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_A) leftPressed = true;
-            else if (keyCode == KeyEvent.VK_RIGHT || keyCode == KeyEvent.VK_D) rightPressed = true;
-            else if (keyCode == KeyEvent.VK_UP || keyCode == KeyEvent.VK_W) upPressed = true;
-            else if (keyCode == KeyEvent.VK_DOWN || keyCode == KeyEvent.VK_S) downPressed = true;
-        }
-
-        // เมื่อปล่อยปุ่ม
-        private void handleKeyReleased(int keyCode) {
-            if (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_A) leftPressed = false;
-            if (keyCode == KeyEvent.VK_RIGHT || keyCode == KeyEvent.VK_D) rightPressed = false;
-            if (keyCode == KeyEvent.VK_UP || keyCode == KeyEvent.VK_W) upPressed = false;
-            if (keyCode == KeyEvent.VK_DOWN || keyCode == KeyEvent.VK_S) downPressed = false;
-        }
-
-        // อัปเดตตำแหน่งผู้เล่นแต่ละเฟรม
-        private void update() {
-            int vx = 0, vy = 0;
-
-            // กำหนดความเร็วตามปุ่มที่กด
-            if (leftPressed && !rightPressed) vx = -PLAYER_SPEED;
-            else if (rightPressed && !leftPressed) vx = PLAYER_SPEED;
-            if (upPressed && !downPressed) vy = -PLAYER_SPEED;
-            else if (downPressed && !upPressed) vy = PLAYER_SPEED;
-
-            // อัปเดตตำแหน่งใหม่
-            x += vx;
-            y += vy;
-
-            // ป้องกันไม่ให้ออกนอกขอบจอ
-            x = Math.max(0, Math.min(WIDTH - PLAYER_SIZE, x));
-            y = Math.max(0, Math.min(HEIGHT - PLAYER_SIZE, y));
-        }
-
-        // ตรวจการชนกับวัตถุอื่น
-        private boolean intersects(int otherX, int otherY, int w, int h) {
-            return x < otherX + w && x + PLAYER_SIZE > otherX &&
-                   y < otherY + h && y + PLAYER_SIZE > otherY;
         }
     }
 

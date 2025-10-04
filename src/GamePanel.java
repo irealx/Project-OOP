@@ -1,9 +1,17 @@
 // ---------- ส่วน import ----------
+import java.awt.AlphaComposite;    // ใช้ควบคุมความโปร่งใสของเลเยอร์มืด
 import java.awt.Color;             // ใช้จัดการสีในกราฟิก
 import java.awt.Font;              // ใช้กำหนดฟอนต์ตัวอักษร
 import java.awt.Graphics;          // สำหรับวาดภาพพื้นฐาน
 import java.awt.Graphics2D;        // สำหรับกราฟิกขั้นสูง เช่น Anti-Aliasing
+import java.awt.Paint;             // เก็บสถานะสีหรือไล่สีระหว่างสร้างเอฟเฟกต์ไฟ
+import java.awt.RadialGradientPaint; // ใช้สร้างไล่ระดับแสงแบบวงกลม
 import java.awt.RenderingHints;    // สำหรับปรับคุณภาพการเรนเดอร์
+import java.awt.Composite;         // ใช้เก็บคอมโพสิตก่อนเปลี่ยนค่า
+import java.awt.geom.Point2D;      // เก็บพิกัดจุดศูนย์กลางของวงไฟ
+import java.awt.image.BufferedImage; // สำหรับเก็บภาพพื้นหลัง
+import java.io.File;               // ระบุไฟล์ภาพพื้นหลัง
+import java.io.IOException;        // จับข้อผิดพลาดเมื่อโหลดภาพ
 import java.awt.event.ActionEvent; // สำหรับตรวจเหตุการณ์ของ Timer
 import java.awt.event.ActionListener; // สำหรับรับฟัง event จาก Timer
 import java.awt.event.KeyAdapter;  // สำหรับจับปุ่มกด
@@ -14,6 +22,8 @@ import java.util.List;             // interface ของ ArrayList
 import java.util.Random;           // ใช้สุ่มตำแหน่งและค่าอื่น ๆ
 import javax.swing.JPanel;         // พื้นที่หลักของเกม (Canvas)
 import javax.swing.Timer;          // ตัวจับเวลาในการอัปเดตเกมทุกเฟรม
+import javax.imageio.ImageIO;      // โหลดไฟล์ภาพจากดิสก์
+
 
 // ---------- คลาสหลักของเกม ----------
 public class GamePanel extends JPanel implements ActionListener {
@@ -29,6 +39,10 @@ public class GamePanel extends JPanel implements ActionListener {
     private static final int PLAYER_SPEED = 4;
     private static final int MONSTER_SPEED = 2;
 
+    // รัศมีไฟที่ใช้เปิดเผยพื้นที่
+    private static final int PLAYER_LIGHT_RADIUS = 160;   // ผู้เล่นมองเห็นได้กว้างกว่า
+    private static final int MONSTER_LIGHT_RADIUS = 120;  // แสงรอบตัวมอนสเตอร์
+
     // จำนวนด่านทั้งหมด
     static final int TOTAL_LEVELS = 6;
     // จำนวนประตูต่อด่าน
@@ -43,12 +57,24 @@ public class GamePanel extends JPanel implements ActionListener {
     private final List<MonsterController> monsters = new ArrayList<>(); // รายชื่อมอนสเตอร์
     private final List<Level> levels = new ArrayList<>();      // รายชื่อด่านทั้งหมด
 
+    // ภาพพื้นหลังที่ใช้กับทุกเลเวล
+    private final BufferedImage backgroundImage;
+
     private int currentLevelIndex = 0; // ด่านปัจจุบัน
 
     // ---------- Constructor ----------
     public GamePanel() {
         setBackground(Color.BLACK);  // ตั้งพื้นหลังเป็นสีดำ (โทนเกม)
         setFocusable(true);          // ให้รับคีย์บอร์ดได้
+
+        // พยายามโหลดภาพพื้นหลัง ถ้าไม่สำเร็จจะเก็บค่า null เพื่อใช้สีพื้นแทน
+        BufferedImage loadedBackground = null;
+        try {
+            loadedBackground = ImageIO.read(new File("Pic/Background.png"));
+        } catch (IOException e) {
+            System.err.println("ไม่สามารถโหลดภาพพื้นหลังได้: " + e.getMessage());
+        }
+        backgroundImage = loadedBackground;
 
         // สร้างมอนสเตอร์ทั้งหมดที่ใช้ในเกม
         initMonsters();
@@ -129,10 +155,22 @@ public class GamePanel extends JPanel implements ActionListener {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); // เปิด anti-aliasing
 
         // เรียกวาดองค์ประกอบทั้งหมด
-        drawLevelInfo(g2d);
+        drawBackground(g2d);
         drawDoors(g2d);
         drawPlayer(g2d);
         drawMonsters(g2d);
+                drawLighting(g2d);
+        drawLevelInfo(g2d);
+    }
+
+    // วาดพื้นหลังให้เต็มหน้าจอ ถ้ามีไฟล์ภาพที่โหลดได้
+    private void drawBackground(Graphics2D g2d) {
+        if (backgroundImage != null) {
+            g2d.drawImage(backgroundImage, 0, 0, WIDTH, HEIGHT, null); // ขยายภาพให้เต็มพื้นที่เกม
+        } else {
+            g2d.setColor(Color.BLACK); // สำรอง: ถ้าโหลดภาพไม่ได้ให้พื้นหลังเป็นสีดำ
+            g2d.fillRect(0, 0, WIDTH, HEIGHT);
+        }
     }
 
     // วาดข้อความแสดงข้อมูลของเลเวล
@@ -145,6 +183,9 @@ public class GamePanel extends JPanel implements ActionListener {
     // วาดประตูทั้งหมดในด่าน
     private void drawDoors(Graphics2D g2d) {
         for (Door door : levels.get(currentLevelIndex).doors) {
+            if (!isDoorVisible(door)) {
+                continue; // ไม่มีไฟส่องถึงก็ไม่วาดประตู ทำให้ผู้เล่นมองไม่เห็น
+            }
             // เปลี่ยนสีตามประเภทของประตู
             switch (door.type) {
                 case ADVANCE: // ไปด่านต่อไป
@@ -175,6 +216,85 @@ public class GamePanel extends JPanel implements ActionListener {
                 g2d.fillRect(monster.getX(), monster.getY(), monster.getSize(), monster.getSize());
             }
         }
+    }
+
+    // สร้างเลเยอร์ความมืดครอบทั้งแผนที่แล้วเจาะรูให้เห็นรอบตัวละคร
+    private void drawLighting(Graphics2D g2d) {
+        BufferedImage darkness = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D gDark = darkness.createGraphics();
+
+        gDark.setComposite(AlphaComposite.Src); // เริ่มด้วยการวาดทับทั้งหมด
+        gDark.setColor(new Color(0, 0, 0, 230)); // สีดำโปร่งใสบางส่วนเพื่อให้รู้สึกว่ามืด
+        gDark.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // เปิดไฟรอบผู้เล่น
+        punchLight(gDark, player.x + PLAYER_SIZE / 2, player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS);
+
+        // เปิดไฟรอบมอนสเตอร์ที่ยังทำงานอยู่
+        for (MonsterController controller : monsters) {
+            if (controller.isActive()) {
+                Monster monster = controller.getMonster();
+                punchLight(gDark,
+                        monster.getX() + monster.getSize() / 2,
+                        monster.getY() + monster.getSize() / 2,
+                        MONSTER_LIGHT_RADIUS);
+            }
+        }
+
+        gDark.dispose();
+        g2d.drawImage(darkness, 0, 0, null); // ซ้อนเลเยอร์ความมืดทับลงไป
+    }
+
+    // เจาะรูให้เลเยอร์มืดกลายเป็นวงแสงแบบค่อย ๆ จางออก
+    private void punchLight(Graphics2D gDark, int centerX, int centerY, int radius) {
+        Paint oldPaint = gDark.getPaint();
+        Composite oldComposite = gDark.getComposite();
+
+        RadialGradientPaint paint = new RadialGradientPaint(
+                new Point2D.Float(centerX, centerY),
+                radius,
+                new float[] { 0f, 1f },
+                new Color[] { new Color(1f, 1f, 1f, 1f), new Color(1f, 1f, 1f, 0f) }
+        );
+
+        gDark.setComposite(AlphaComposite.DstOut); // ลบอัลฟาของเลเยอร์มืดตามไล่สี
+        gDark.setPaint(paint);
+        gDark.fillOval(centerX - radius, centerY - radius, radius * 2, radius * 2);
+
+        gDark.setPaint(oldPaint);
+        gDark.setComposite(oldComposite);
+    }
+
+    // ตรวจว่าประตูอยู่ในรัศมีไฟของผู้เล่นหรือมอนสเตอร์หรือไม่
+    private boolean isDoorVisible(Door door) {
+        int centerX = door.x + DOOR_SIZE / 2;
+        int centerY = door.y + DOOR_SIZE / 2;
+
+        if (isPointLit(centerX, centerY, player.x + PLAYER_SIZE / 2,
+                player.y + PLAYER_SIZE / 2, PLAYER_LIGHT_RADIUS)) {
+            return true; // ไฟจากผู้เล่นถึง
+        }
+
+        for (MonsterController controller : monsters) {
+            if (controller.isActive()) {
+                Monster monster = controller.getMonster();
+                if (isPointLit(centerX, centerY,
+                        monster.getX() + monster.getSize() / 2,
+                        monster.getY() + monster.getSize() / 2,
+                        MONSTER_LIGHT_RADIUS)) {
+                    return true; // ไฟจากมอนสเตอร์ถึง
+                }
+            }
+        }
+
+        return false; // ไม่มีไฟส่องถึงประตูเลย
+    }
+
+    // ฟังก์ชันคำนวณระยะระหว่างจุดกับแหล่งกำเนิดไฟ
+    private boolean isPointLit(int px, int py, int lx, int ly, int radius) {
+        int dx = px - lx;
+        int dy = py - ly;
+        return dx * dx + dy * dy <= radius * radius;
     }
 
     // ---------- ส่วนอัปเดตเกมแต่ละเฟรม ----------

@@ -63,14 +63,13 @@ public class GamePanel extends JPanel implements ActionListener {
     private final List<Level> levels = new ArrayList<>();      // รายชื่อด่านทั้งหมด
 
     private final BufferedImage backgroundImage; // ภาพพื้นหลังที่ใช้กับทุกเลเวล
-    private final BufferedImage[] puzzleImages = loadPuzzleImages(); // ภาพ Puzzle ทั้ง 9 รูป
+    private final Puzzle puzzle = new Puzzle(); // ตัวจัดการภาพ Puzzle
 
     private int currentLevelIndex = 0; // ด่านปัจจุบัน
     private Integer pendingLevelReset = null; // เก็บด่านที่จะรีเซ็ตหลังเล่นแอนิเมชันตาย
     private boolean doorInteractionActive = false; // สถานะหยุดเกมเมื่อชนประตู
     private Door activeDoor = null;                 // ประตูที่ผู้เล่นชนอยู่
-    private BufferedImage activePuzzleImage = null; // ภาพ Puzzle ที่กำลังเปิดให้ดู
-    private Integer activePuzzleNumber = null;      // เลขของภาพ Puzzle ที่กำลังโชว์
+
 
     // ---------- Constructor ----------
     public GamePanel() {
@@ -168,28 +167,13 @@ public class GamePanel extends JPanel implements ActionListener {
         }
     }
 
-    // โหลดภาพ Puzzle ทั้ง 9 รูปเก็บไว้เพื่อนำมาแสดงเมื่อชนประตูพิเศษ
-    private BufferedImage[] loadPuzzleImages() {
-        BufferedImage[] images = new BufferedImage[9];
-        for (int i = 1; i <= 9; i++) {
-            try {
-                images[i - 1] = ImageIO.read(new File(String.format("Pic/character/puzzle/pz%d.png", i)));
-            } catch (IOException e) {
-                System.err.println("ไม่สามารถโหลดภาพ puzzle หมายเลข " + i + ": " + e.getMessage());
-                images[i - 1] = null;
-            }
-        }
-        return images;
-    }
-
     // ---------- รีเซ็ตสถานะเมื่อเริ่มหรือเปลี่ยนด่าน ----------
     private void resetForLevel(int levelIndex) {
         currentLevelIndex = levelIndex; // ตั้งค่าด่านปัจจุบัน
         pendingLevelReset = null; // เคลียร์สถานะรีเซ็ตที่ค้างอยู่
         doorInteractionActive = false; // เคลียร์สถานะหยุดเกมจากการชนประตู
         activeDoor = null;
-        activePuzzleImage = null;
-        activePuzzleNumber = null;
+        puzzle.clearActivePuzzle();
         player.updateBounds(panelWidth, panelHeight); // ปรับขอบเขตของผู้เล่นให้ตรงกับขนาดจอใหม่
         Level level = levels.get(levelIndex); // ดึงด่านที่เลือกมา
         level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
@@ -198,8 +182,9 @@ public class GamePanel extends JPanel implements ActionListener {
         // เตรียมมอนสเตอร์ทั้งหมดให้พร้อมสำหรับด่านใหม่
         for (MonsterController controller : monsters) {
             controller.prepareForLevel(levelIndex, random, panelWidth, panelHeight);
-            }
         }
+    }    
+        
 
 
     // ---------- ส่วนวาดกราฟิก ----------
@@ -253,31 +238,7 @@ public class GamePanel extends JPanel implements ActionListener {
         if (!doorInteractionActive || activeDoor == null || activeDoor.getType() != Door.Type.PUZZLE) {
             return;
         }
-        // สร้างพื้นหลังทึบแสงเล็กน้อยเพื่อให้ภาพ Puzzle เด่นขึ้น
-        g2d.setColor(new Color(0, 0, 0, 180));
-        g2d.fillRect(0, 0, panelWidth, panelHeight);
-
-        int drawY = panelHeight / 2 - 20;
-        int drawX = panelWidth / 2;
-        int drawWidth = 0;
-        int drawHeight = 0;
-
-        if (activePuzzleImage != null) {
-            int imgWidth = activePuzzleImage.getWidth();
-            int imgHeight = activePuzzleImage.getHeight();
-
-            // ปรับขนาดภาพให้ไม่ใหญ่เกินพื้นที่จอ โดยคงอัตราส่วนเดิม
-            double scale = Math.min((panelWidth - 120) / (double) imgWidth,
-                                    (panelHeight - 160) / (double) imgHeight);
-            scale = Math.min(1.0, Math.max(0.1, scale)); // ป้องกัน scale ผิดปกติ
-
-            drawWidth = (int) Math.round(imgWidth * scale);
-            drawHeight = (int) Math.round(imgHeight * scale);
-            drawX = (panelWidth - drawWidth) / 2;
-            drawY = (panelHeight - drawHeight) / 2 - 20;
-
-            g2d.drawImage(activePuzzleImage, drawX, drawY, drawWidth, drawHeight, null);
-        }
+        puzzle.drawOverlay(g2d, panelWidth, panelHeight);
     }
 
     // วาดประตูทั้งหมดในด่าน
@@ -460,19 +421,11 @@ public class GamePanel extends JPanel implements ActionListener {
 
         switch (door.getType()) {
             case PUZZLE:
-                Integer number = door.getPuzzleNumber();
-                if (number != null && number >= 1 && number <= puzzleImages.length) {
-                    activePuzzleImage = puzzleImages[number - 1];
-                    activePuzzleNumber = number;
-                } else {
-                    activePuzzleImage = null;
-                    activePuzzleNumber = null;
-                }
+                puzzle.showPuzzle(door.getPuzzleNumber());
                 break;
             case ADVANCE:
             case BACK:
-                activePuzzleImage = null;
-                activePuzzleNumber = null;
+                puzzle.clearActivePuzzle();
                 promptDoorPassword(level, door);
                 break;
         }
@@ -536,8 +489,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private void clearDoorInteractionState() {
         doorInteractionActive = false;
         activeDoor = null;
-        activePuzzleImage = null;
-        activePuzzleNumber = null;
+        puzzle.clearActivePuzzle();
         requestFocusInWindow();
     }
 

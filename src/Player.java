@@ -1,6 +1,5 @@
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -196,34 +195,8 @@ public class Player {
      */
     public void draw(Graphics2D g2d) {
         BufferedImage frame = getCurrentFrame();
-        if (frame == null) {
-            g2d.setColor(fallbackColor);
-            g2d.fillRect(x, y, size, size); // วาดสี่เหลี่ยมสีเหลืองแทนถ้าไม่มีภาพ
-            return;
-        }
-
-        // ปรับขนาด sprite ที่แสดงผล (เช่น 1.5 เท่า)
-        double spriteScale = 12; // ปรับค่านี้เพื่อเพิ่ม/ลดขนาด sprite
-        double scaleX = spriteScale * size / frame.getWidth();
-        double scaleY = spriteScale * size / frame.getHeight();
-
-        // สร้าง AffineTransform เพื่อจัดตำแหน่ง sprite ให้อยู่กลาง object player
-        AffineTransform transform = new AffineTransform();
-        int centerX = x + size / 2;
-        int centerY = y + size / 2;
-
-        if (facingLeft) {
-            // กลับ sprite ทางซ้าย และจัดให้อยู่กลาง object player
-            transform.translate(centerX, centerY);
-            transform.scale(-scaleX, scaleY); // scaleX ติดลบเพื่อกลับด้าน
-            transform.translate(-frame.getWidth() / 2, -frame.getHeight() / 2);
-        } else {
-            // sprite ปกติและอยู่กลาง object player
-            transform.translate(centerX, centerY);
-            transform.scale(scaleX, scaleY);
-            transform.translate(-frame.getWidth() / 2, -frame.getHeight() / 2);
-        }
-        g2d.drawImage(frame, transform, null);
+        // มอบหมายให้คลาส Sprite วาดภาพแทนเพื่อให้โค้ดใน Player กระชับขึ้น
+        Sprite.drawPlayer(g2d, frame, x, y, size, facingLeft, fallbackColor);
     }
 
     /**

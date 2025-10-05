@@ -165,6 +165,20 @@ public abstract class Sprite {
         double spriteScale = 12; // ขยายสไปรต์ให้ใหญ่กว่ากล่องชน
         double scaleX = spriteScale * size / (double) frame.getWidth();
         double scaleY = spriteScale * size / (double) frame.getHeight();
+        AffineTransform transform = new AffineTransform();
+        double centerX = x + size / 2.0;
+        double centerY = y + size / 2.0;
+        transform.translate(centerX, centerY);
+        if (facingLeft) {
+            transform.scale(-scaleX, scaleY);
+        } else {
+            transform.scale(scaleX, scaleY);
+        }
+        transform.translate(-frame.getWidth() / 2.0, -frame.getHeight() / 2.0);
+
+        g2d.drawImage(frame, transform, null);
+    }
+
 
     public static void drawPlayer(Graphics2D g2d, BufferedImage frame, int x, int y,
                                   int hitboxSize, boolean facingLeft, Color fallbackColor) {
@@ -176,12 +190,12 @@ public abstract class Sprite {
         }
 
         double spriteScale = 12; // อัตราส่วนขยายของสไปรต์จาก hitbox เดิม
-        double scaleX = spriteScale * hitboxSize / frame.getWidth();
-        double scaleY = spriteScale * hitboxSize / frame.getHeight();
+        double scaleX = spriteScale * hitboxSize / (double) frame.getWidth();
+        double scaleY = spriteScale * hitboxSize / (double) frame.getHeight();
 
         AffineTransform transform = new AffineTransform();
-        int centerX = getCenterX();
-        int centerY = getCenterY();
+        double centerX = x + hitboxSize / 2.0;
+        double centerY = y + hitboxSize / 2.0;
         transform.translate(centerX, centerY);
         if (facingLeft) {
             transform.scale(-scaleX, scaleY);

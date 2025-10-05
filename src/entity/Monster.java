@@ -2,21 +2,24 @@ package entity;
 
 import java.util.Random;
 
-    /**
-     * คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท
-     * รวมระบบเปิด/ปิดตามด่านแทน MonsterController เดิม
-     */
-    public abstract class Monster extends Sprite {
-        private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
-        private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
-        private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
-        private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
-        // เลือกมุมแบบสุ่ม
+/**
+/**
+ * คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท
+ * รวมระบบเปิด/ปิดตามด่านแทน MonsterController เดิม
+ */
+public abstract class Monster extends Sprite {
+
+    private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
+    private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
+
+    // เลือกมุมแบบสุ่ม
     protected Monster(int size, int speed) {
         super(size, speed);
     }
+
     /**
      * กำหนดว่ามอนสเตอร์ตัวนี้จะปรากฏในด่านใดบ้าง
+     * 
      * @param totalLevels จำนวนด่านทั้งหมดของเกม
      * @param levelGroups รายการ index ของด่าน (กำหนดหลายชุดได้)
      */
@@ -34,10 +37,12 @@ import java.util.Random;
         spawnAtRandomCorner(random);
         onLevelActivated(random);
     }
+
     /** Hook สำหรับ subclass ใช้ตั้งค่าพิเศษหลัง spawn (เช่น สั่งปล่อยวงสตันทันที) */
     protected void onLevelActivated(Random random) {
         // ค่าเริ่มต้นไม่ทำอะไร
     }
+
     /** อัปเดตพฤติกรรมของมอนสเตอร์ในแต่ละเฟรม (เรียกเฉพาะเมื่อ active) */
     public final void update(int playerX, int playerY) {
         if (!active) {
@@ -78,6 +83,6 @@ import java.util.Random;
                 }
             }
         }
-        return result;    
+        return result;
     }
 }

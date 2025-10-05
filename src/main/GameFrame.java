@@ -25,3 +25,50 @@ public class GameFrame extends JFrame {
         setResizable(false); // ปิดการปรับขนาดหน้าต่าง
 
         // สร้าง panel หลักของเกม (จอที่แสดงภาพและอัปเดตเกม)
+        panel = new GamePanel();
+        setContentPane(panel);
+        setPreferredSize(windowedSize);
+        pack();
+        setLocationRelativeTo(null);
+
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_F11) {
+                    toggleFullscreen();
+                }
+            }
+        });
+        fullscreen = true;
+        applyWindowState();
+    }
+
+    private void toggleFullscreen() {
+        fullscreen = !fullscreen;
+        applyWindowState();
+    }
+    
+    private void applyWindowState() {
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+
+        if (isDisplayable()) {
+            dispose();
+        }
+
+        setUndecorated(fullscreen);
+
+        if (fullscreen) {
+            panel.setGameSize(screenSize.width, screenSize.height);
+            setExtendedState(JFrame.MAXIMIZED_BOTH);
+            setSize(screenSize);
+        } else {
+            panel.setGameSize(windowedSize.width, windowedSize.height);
+            setExtendedState(JFrame.NORMAL);
+            setSize(windowedSize);
+            setLocationRelativeTo(null);
+        }
+
+        setVisible(true);
+        panel.requestFocusInWindow();
+    }
+}

@@ -17,7 +17,7 @@ import java.awt.event.ActionListener; // สำหรับรับฟัง ev
 import java.awt.event.KeyAdapter;  // สำหรับจับปุ่มกด
 import java.awt.event.KeyEvent;    // สำหรับรหัสปุ่มคีย์บอร์ด
 import java.util.ArrayList;        // ใช้เก็บข้อมูลในลิสต์แบบ dynamic
-import java.util.Collections;      // ใช้สำหรับสุ่มและจัดการ list
+import java.util.Collections;
 import java.util.List;             // interface ของ ArrayList
 import java.util.Random;           // ใช้สุ่มตำแหน่งและค่าอื่น ๆ
 import javax.swing.JPanel;         // พื้นที่หลักของเกม (Canvas)
@@ -148,11 +148,14 @@ public class GamePanel extends JPanel implements ActionListener {
         // เพิ่มมอนสเตอร์แต่ละชนิดพร้อมระบุว่าอยู่ในด่านใด
         monsters.add(new MonsterController(
             new StunMonster(MONSTER_SIZE, MONSTER_SPEED),
-            new int[] { 0, 3 }  // มอนสเตอร์นี้โผล่ในด่าน 0 และ 3
+            new int[] { 0, 3 },
+            TOTAL_LEVELS  // มอนสเตอร์นี้โผล่ในด่าน 0 และ 3
         ));
         monsters.add(new MonsterController(
             new WrapMonster(MONSTER_SIZE, MONSTER_SPEED),
-            new int[] { 1, 4 }  // โผล่ในด่าน 1 และ 4
+            new int[] { 1, 4 },
+            new int[] { 1, 4 },
+            TOTAL_LEVELS  // โผล่ในด่าน 1 และ 4
         ));
         monsters.add(new MonsterController(
             new ShootingMonster(MONSTER_SIZE, MONSTER_SPEED + 1),
@@ -163,7 +166,7 @@ public class GamePanel extends JPanel implements ActionListener {
     // ---------- ฟังก์ชันสร้างด่าน ----------
     private void initLevels() {
         for (int i = 0; i < TOTAL_LEVELS; i++) {
-            levels.add(new Level()); // สร้าง Level ว่างไว้ทั้งหมด 6 ด่าน
+            levels.add(new Level(DOORS_PER_LEVEL, DOOR_SIZE)); // สร้าง Level ว่างไว้ทั้งหมด 6 ด่าน
         }
     }
 
@@ -176,7 +179,7 @@ public class GamePanel extends JPanel implements ActionListener {
         puzzle.clearActivePuzzle();
         player.updateBounds(panelWidth, panelHeight); // ปรับขอบเขตของผู้เล่นให้ตรงกับขนาดจอใหม่
         Level level = levels.get(levelIndex); // ดึงด่านที่เลือกมา
-        level.randomizeDoors(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
+        level.reset(random, panelWidth, panelHeight); // สุ่มตำแหน่งและชนิดของประตูใหม่ทุกครั้ง
         player.spawn(); // วางผู้เล่นที่จุดเริ่มต้นกลางจอ
 
         // เตรียมมอนสเตอร์ทั้งหมดให้พร้อมสำหรับด่านใหม่
@@ -243,7 +246,7 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // วาดประตูทั้งหมดในด่าน
     private void drawDoors(Graphics2D g2d) {
-        for (Door door : levels.get(currentLevelIndex).doors) {
+        for (Door door : levels.get(currentLevelIndex).getDoors()) {
             if (!isDoorVisible(door)) {
                 continue; // ไม่มีไฟส่องถึงก็ไม่วาดประตู ทำให้ผู้เล่นมองไม่เห็น
             }
@@ -351,9 +354,7 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // อัปเดตเฟรมแอนิเมชันของประตูทุกบานในด่านปัจจุบัน
     private void updateDoorAnimations() {
-        for (Door door : levels.get(currentLevelIndex).doors) {
-            door.updateAnimation();
-        }
+        levels.get(currentLevelIndex).updateDoorAnimations();
     }
 
 
@@ -403,7 +404,7 @@ public class GamePanel extends JPanel implements ActionListener {
             return;
         }
         Level level = levels.get(currentLevelIndex);
-        for (Door door : level.doors) {
+        for (Door door : level.getDoors()) {
             int doorX = door.getX(panelWidth);
             int doorY = door.getY(panelHeight);
             if (player.intersects(doorX, doorY, DOOR_SIZE, DOOR_SIZE)) {
@@ -555,150 +556,5 @@ public class GamePanel extends JPanel implements ActionListener {
                 }
             }
         }
-    }
-
-    // ---------- คลาสย่อย Level ----------
-    private static class Level {
-        private List<Door> doors = new ArrayList<>();
-        private int passwordCode = 0; // ผลรวมของเลข Puzzle ทั้ง 4 บาน
-
-        private Level() {}
-
-        // สุ่มประตูแต่ละบาน (ชนิด + ตำแหน่ง) และกำหนดเลข Puzzle แบบไม่ซ้ำ
-        private void randomizeDoors(Random random, int panelWidth, int panelHeight) {
-            List<Door.Type> types = new ArrayList<>();
-            types.add(Door.Type.ADVANCE);
-            types.add(Door.Type.BACK);
-            // ที่เหลือเป็น NEUTRAL
-            while (types.size() < DOORS_PER_LEVEL) {
-                types.add(Door.Type.PUZZLE);
-            }
-
-            Collections.shuffle(types, random);
-
-            List<Point> points = generateDistinctDoorPositions(random, panelWidth, panelHeight);
-            doors = new ArrayList<>();
-            passwordCode = 0;
-
-            List<Integer> puzzlePool = new ArrayList<>();
-            for (int i = 1; i <= 9; i++) {
-                puzzlePool.add(i);
-            }
-            Collections.shuffle(puzzlePool, random);
-            List<Integer> selectedNumbers = new ArrayList<>(puzzlePool.subList(0, 4));
-            int sum = 0;
-            for (int value : selectedNumbers) {
-                sum += value;
-            }
-            passwordCode = sum;
-            Collections.shuffle(selectedNumbers, random); // สุ่มลำดับการปรากฏของภาพ
-            int puzzleIndex = 0;
-
-            for (int i = 0; i < DOORS_PER_LEVEL; i++) {
-                Point p = points.get(i);
-                Door door = new Door(types.get(i), p.x, p.y, panelWidth, panelHeight, DOOR_SIZE);
-                if (door.getType() == Door.Type.PUZZLE && puzzleIndex < selectedNumbers.size()) {
-                    int number = selectedNumbers.get(puzzleIndex++);
-                    door.setPuzzleNumber(number);
-                }
-                doors.add(door);
-            }
-        }
-        
-        private int getPasswordCode() {
-            return passwordCode;
-        }
-
-
-        // ฟังก์ชันสร้างตำแหน่งประตูไม่ให้ทับกัน
-        private List<Point> generateDistinctDoorPositions(Random random, int panelWidth, int panelHeight) {
-            List<Point> points = new ArrayList<>();
-            int attempts = 0;
-
-            // สุ่มพิกัดจนกว่าจะได้ครบหรือครบจำนวนครั้งสูงสุด
-            while (points.size() < DOORS_PER_LEVEL && attempts < 10_000) {
-                attempts++;
-                int xRange = Math.max(1, panelWidth - 100 - DOOR_SIZE);
-                int yRange = Math.max(1, panelHeight - 150 - DOOR_SIZE);
-
-                int x = 50 + random.nextInt(xRange);
-                int y = 80 + random.nextInt(yRange);
-                Point candidate = new Point(x, y);
-
-                boolean overlaps = false;
-                for (Point existing : points) {
-                    // ถ้าใกล้กันเกินไปให้ถือว่าทับกัน
-                    if (existing.distanceSquared(candidate) < (DOOR_SIZE + 10) * (DOOR_SIZE + 10)) {
-                        overlaps = true;
-                        break;
-                    }
-                }
-
-                if (!overlaps) {
-                    points.add(candidate);
-                }
-            }
-
-            // ถ้ายังไม่ครบ ให้เติม dummy door
-            while (points.size() < DOORS_PER_LEVEL) {
-                int fallbackX = Math.min(panelWidth - DOOR_SIZE, 60 * points.size());
-                int fallbackY = Math.min(panelHeight - DOOR_SIZE, 100 + 40 * points.size());
-                points.add(new Point(Math.max(0, fallbackX), Math.max(0, fallbackY)));
-            }
-            return points;
-        }
-    }
-
-    // ---------- คลาสจุดพิกัด ----------
-    private static class Point {
-        private final int x, y;
-        private Point(int x, int y) { this.x = x; this.y = y; }
-
-        // คำนวณระยะห่างกำลังสอง (เพื่อใช้เช็กว่าทับกันไหม)
-        private int distanceSquared(Point other) {
-            int dx = x - other.x;
-            int dy = y - other.y;
-            return dx * dx + dy * dy;
-        }
-    }
-
-    // ---------- คลาสควบคุมมอนสเตอร์ ----------
-    private static class MonsterController {
-        private final Monster monster;       // ตัวมอนสเตอร์จริง
-        private final boolean[] activeLevels; // ด่านที่มอนสเตอร์นี้จะปรากฏ
-        private boolean active;               // สถานะเปิดใช้งานในด่านปัจจุบัน
-
-        // กำหนดมอนสเตอร์และด่านที่มันจะออก
-        private MonsterController(Monster monster, int[] activeLevelIndices) {
-            this.monster = monster;
-            this.activeLevels = new boolean[TOTAL_LEVELS];
-            for (int idx : activeLevelIndices) {
-                if (idx >= 0 && idx < TOTAL_LEVELS) {
-                    this.activeLevels[idx] = true;
-                }
-            }
-        }
-
-        // เตรียมมอนสเตอร์สำหรับด่านที่กำหนด
-        private void prepareForLevel(int levelIndex, Random random, int panelWidth, int panelHeight) {
-            active = levelIndex >= 0 && levelIndex < activeLevels.length && activeLevels[levelIndex];
-            if (active) {
-                monster.spawn(random, panelWidth, panelHeight);
-                // ให้เริ่มวงสตั้นทันทีหลังสปอว์น เพื่อให้ผู้เล่นเห็นการทำงาน
-                if (monster instanceof StunMonster) {
-                    ((StunMonster) monster).triggerStun();
-                }
-            }
-        }
-        
-
-        // อัปเดตมอนสเตอร์แต่ละเฟรม
-        private void update(int playerX, int playerY, int panelWidth, int panelHeight) {
-            if (!active) return;
-            monster.update(playerX, playerY, panelWidth, panelHeight);
-        }
-
-        private boolean isActive() { return active; }
-        private Monster getMonster() { return monster; }
     }
 }

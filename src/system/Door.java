@@ -58,7 +58,6 @@ public class Door {
             });
             g.fillRect(drawX, drawY, size, size);
         }
-        EffectRenderer.drawGlow(g, Config.DOOR_GLOW, drawX + size / 2, drawY + size / 2, size);
     }
     public int getX(int width) {
         int available = Math.max(0, width - size);

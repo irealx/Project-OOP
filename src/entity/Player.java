@@ -86,10 +86,17 @@ public class Player extends Sprite {
             return;
         }
         AffineTransform old = g.getTransform();
-        int drawX = facingLeft ? x + size : x;
-        g.translate(drawX, y);
-        g.scale(facingLeft ? -1 : 1, 1);
-        g.drawImage(frame, 0, 0, size, size, null);
+        int drawWidth = Math.max(1, (int) Math.round(size * Config.PLAYER_SPRITE_SCALE));
+        int drawHeight = drawWidth;
+        int offsetX = (size - drawWidth) / 2;
+        int offsetY = (size - drawHeight) / 2;
+        g.translate(x + offsetX, y + offsetY);
+        if (facingLeft) {
+            g.scale(-1, 1);
+            g.drawImage(frame, -drawWidth, 0, drawWidth, drawHeight, null);
+        } else {
+            g.drawImage(frame, 0, 0, drawWidth, drawHeight, null);
+        }
         g.setTransform(old);
     }
 

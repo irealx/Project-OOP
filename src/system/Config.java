@@ -12,6 +12,7 @@ public final class Config {
     public static final int PANEL_HEIGHT = 600;
     public static final int DOOR_SIZE = 48;
     public static final int PLAYER_SIZE = 24;
+    public static final double PLAYER_SPRITE_SCALE = 4;
 
     // REFACTOR: ความเร็วและคูลดาวน์ของวัตถุถูกเก็บในที่เดียวเพื่อลดตัวเลขกระจัดกระจาย
     public static final int PLAYER_SPEED = 4;

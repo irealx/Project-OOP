@@ -140,12 +140,14 @@ public class Player extends Sprite {
         }
         if (++frameTimer >= 6) {
             frameTimer = 0;
-            frameIndex = Math.min(frameIndex + 1, current.length - 1);
-            if (dead && frameIndex == current.length - 1) {
-                deathFinished = true;
-            }
-            if (!dead) {
-                frameIndex %= current.length;
+            if (dead) {
+                if (frameIndex < current.length - 1) {
+                    frameIndex++;
+                } else {
+                    deathFinished = true;
+                }
+            } else {
+                frameIndex = (frameIndex + 1) % current.length;
             }
         }
     }

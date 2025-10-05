@@ -1,4 +1,5 @@
 package entity;
+
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -9,9 +10,9 @@ import javax.imageio.ImageIO;
 /**
  * คลาสควบคุมการแสดงผลและการเคลื่อนไหวของผู้เล่น
  * - เก็บข้อมูลตำแหน่ง การเคลื่อนที่ และแอนิเมชัน
- * - เพิ่มขนาด sprite ให้ใหญ่ขึ้น แต่ hitbox เท่าเดิม
+ * - พึ่งพา Sprite ในการจัดการขนาด/การชน เพื่อให้โค้ดไม่ซ้ำซ้อน
  */
-public class Player {
+public class Player extends Sprite {
 
     // สถานะของผู้เล่น
     private enum State {
@@ -25,10 +26,6 @@ public class Player {
 
     private static final int FRAME_DELAY = 8; // จำนวนเฟรมก่อนเปลี่ยนภาพใหม่
 
-    private final int size;         // ขนาด hitbox ของผู้เล่น (ไม่เปลี่ยน)
-    private final int speed;        // ความเร็วเคลื่อนที่
-    private int panelWidth;   // ความกว้างของฉาก
-    private int panelHeight;  // ความสูงของฉาก
     private final Color fallbackColor = new Color(0xFFD700); // สีสำรองถ้าโหลดภาพไม่ได้
 
     // อาร์เรย์เก็บเฟรมของแต่ละแอ็กชัน
@@ -37,7 +34,6 @@ public class Player {
     private final BufferedImage[] deathFrames;
 
     // ตำแหน่งและสถานะปุ่ม
-    private int x, y;
     private boolean leftPressed, rightPressed, upPressed, downPressed;
     private boolean facingLeft; // true = หันซ้าย
 
@@ -51,8 +47,7 @@ public class Player {
      * ฟังก์ชันสร้างผู้เล่น และโหลดภาพ Sprite ทั้งหมด
      */
     public Player(int size, int speed, int panelWidth, int panelHeight) {
-        this.size = size;
-        this.speed = speed;
+        super(size, speed);
         updateBounds(panelWidth, panelHeight);
 
         // โหลดภาพทั้งหมด
@@ -67,8 +62,7 @@ public class Player {
      * ฟังก์ชัน spawn() — วางผู้เล่นที่กลางจอใหม่
      */
     public final void spawn() {
-        x = panelWidth / 2 - size / 2;
-        y = panelHeight / 2 - size / 2;
+        centerOnScreen();
         leftPressed = rightPressed = upPressed = downPressed = false;
         facingLeft = false;
         changeState(State.IDLE);
@@ -83,10 +77,7 @@ public class Player {
      * ปรับขนาดขอบเขตการเคลื่อนที่ของผู้เล่นเมื่อพื้นที่เกมเปลี่ยนไป
      */
     public void updateBounds(int panelWidth, int panelHeight) {
-        this.panelWidth = Math.max(size, panelWidth);
-        this.panelHeight = Math.max(size, panelHeight);
-        x = Math.max(0, Math.min(this.panelWidth - size, x));
-        y = Math.max(0, Math.min(this.panelHeight - size, y));
+        super.updateBounds(panelWidth, panelHeight);
     }
 
     /**
@@ -169,19 +160,14 @@ public class Player {
 
         int vx = 0, vy = 0; // ความเร็วแนวนอนและแนวตั้ง
 
-        if (leftPressed && !rightPressed) vx = -speed;
-        else if (rightPressed && !leftPressed) vx = speed;
+        int moveSpeed = getSpeed();
+        if (leftPressed && !rightPressed) vx = -moveSpeed;
+        else if (rightPressed && !leftPressed) vx = moveSpeed;
 
-        if (upPressed && !downPressed) vy = -speed;
-        else if (downPressed && !upPressed) vy = speed;
+        if (upPressed && !downPressed) vy = -moveSpeed;
+        else if (downPressed && !upPressed) vy = moveSpeed;
 
-        // อัปเดตตำแหน่ง
-        x += vx;
-        y += vy;
-
-        // จำกัดไม่ให้ออกนอกขอบจอ
-        x = Math.max(0, Math.min(panelWidth - size, x));
-        y = Math.max(0, Math.min(panelHeight - size, y));
+        moveBy(vx, vy); // ใช้ฟังก์ชันจาก Sprite เพื่ออัปเดตและบีบตำแหน่งในตัวเดียว
 
         // เปลี่ยนสถานะระหว่างยืนนิ่งกับวิ่ง
         if (vx != 0 || vy != 0) changeState(State.RUN);
@@ -197,7 +183,7 @@ public class Player {
     public void draw(Graphics2D g2d) {
         BufferedImage frame = getCurrentFrame();
         // มอบหมายให้คลาส Sprite วาดภาพแทนเพื่อให้โค้ดใน Player กระชับขึ้น
-        Sprite.drawPlayer(g2d, frame, x, y, size, facingLeft, fallbackColor);
+        drawFrame(g2d, frame, facingLeft, fallbackColor);
     }
 
     /**
@@ -213,59 +199,6 @@ public class Player {
     public boolean isStunned() {
         return isStunned;
     }
-
-    /**
-     * ฟังก์ชันตรวจการชนกับวัตถุอื่น
-     */
-    public boolean intersects(int otherX, int otherY, int w, int h) {
-        return x < otherX + w && x + size > otherX && y < otherY + h && y + size > otherY;
-    }
-
-    /**
-     * ดันผู้เล่นให้ออกนอกพื้นที่สี่เหลี่ยมที่ระบุ (เช่น หลังยกเลิกตรวจประตู)
-     * @param rectX จุดเริ่มต้นแกน X ของพื้นที่ที่ต้องออกมา
-     * @param rectY จุดเริ่มต้นแกน Y ของพื้นที่ที่ต้องออกมา
-     * @param rectWidth ความกว้างของพื้นที่
-     * @param rectHeight ความสูงของพื้นที่
-     */
-    public void pushOutsideRect(int rectX, int rectY, int rectWidth, int rectHeight) {
-        if (!intersects(rectX, rectY, rectWidth, rectHeight)) {
-            return; // ถ้าไม่ได้ชนอยู่ก็ไม่ต้องขยับ
-        }
-
-        int playerRight = x + size;
-        int playerBottom = y + size;
-        int rectRight = rectX + rectWidth;
-        int rectBottom = rectY + rectHeight;
-
-        int overlapLeft = playerRight - rectX;
-        int overlapRight = rectRight - x;
-        int overlapTop = playerBottom - rectY;
-        int overlapBottom = rectBottom - y;
-
-        int minOverlap = Math.min(Math.min(overlapLeft, overlapRight), Math.min(overlapTop, overlapBottom));
-
-        if (minOverlap == overlapLeft) {
-            x = rectX - size - 1;
-        } else if (minOverlap == overlapRight) {
-            x = rectRight + 1;
-        } else if (minOverlap == overlapTop) {
-            y = rectY - size - 1;
-        } else {
-            y = rectBottom + 1;
-        }
-
-        x = Math.max(0, Math.min(panelWidth - size, x));
-        y = Math.max(0, Math.min(panelHeight - size, y));
-    }
-
-    /**
-     * ดันผู้เล่นออกจากสี่เหลี่ยมจัตุรัส (เช่น ประตูที่กว้างเท่ากันทุกด้าน)
-     */
-    public void pushOutsideSquare(int rectX, int rectY, int rectSize) {
-        pushOutsideRect(rectX, rectY, rectSize, rectSize);
-    }
-
 
     /**
      * ฟังก์ชันเมื่อผู้เล่นตาย เริ่มเล่นแอนิเมชัน Death
@@ -290,13 +223,6 @@ public class Player {
     public boolean isDeathAnimationFinished() {
         return deathAnimationFinished;
     }
-
-    // Getter คืนค่าตำแหน่งต่าง ๆ
-    public int getX() { return x; }
-    public int getY() { return y; }
-    public int getCenterX() { return x + size / 2; }
-    public int getCenterY() { return y + size / 2; }
-    public int getSize() { return size; }
 
     /**
      * ฟังก์ชันเปลี่ยนสถานะของผู้เล่น (Idle / Run / Death)

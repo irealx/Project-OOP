@@ -1,4 +1,5 @@
 package entity;
+
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -6,7 +7,6 @@ import java.awt.Graphics2D;
 
 // มอนสเตอร์พื้นฐานที่แค่เคลื่อนเข้าหาผู้เล่น
 public class StunMonster extends Monster {
-    private final int speed; // ความเร็วคงที่ของมอนสเตอร์
     private final int stunDurationTicks = 60;     // ระยะเวลาที่ผู้เล่นจะโดนสตัน (ประมาณ 1 วินาทีหากเฟรม ~60fps)
     private final int stunCooldownTicks = 180;    // คูลดาวน์ก่อนยิงวงครั้งต่อไป (~3 วินาที)
     private final int ringMaxRadius = 480;        // รัศมีสูงสุดของวงสตั้น
@@ -17,12 +17,16 @@ public class StunMonster extends Monster {
 
     // Constructor กำหนดขนาดและความเร็ว
     public StunMonster(int size, int speed) {
-        super(size);
-        this.speed = speed;
+        super(size, speed);
     }
 
     @Override
-    public void update(int playerX, int playerY, int panelWidth, int panelHeight) {
+    protected void onLevelActivated(java.util.Random random) {
+        triggerStun();
+    }
+
+    @Override
+    protected void behave(int playerX, int playerY) {
         // ถ้ามีวงสตันกำลังทำงาน → อยู่นิ่งและนับถอยหลัง
         if (stunTick > 0) {
             stunTick--;
@@ -46,8 +50,8 @@ public class StunMonster extends Monster {
         }
 
         // เคลื่อนที่เข้าหาผู้เล่นตามปกติ (จะวิ่งทันทีหลัง stunTick หมด แม้จะอยู่ในช่วง cooldown)
-        moveTowardPlayer(playerX, playerY, speed);
-        clampToBounds(panelWidth, panelHeight); // บังคับไม่ให้ออกนอกขอบจอ
+        moveToward(playerX, playerY, getSpeed());
+        clampToBounds(); // บังคับไม่ให้ออกนอกขอบจอ
 
         // ถ้าไม่มีทั้งสตันและคูลดาวน์ → เริ่มจับเวลาหยุดนิ่งก่อนปล่อยวง
         if (stunTick == 0 && cooldownTick == 0 && autoTrigger) {

@@ -1,70 +1,83 @@
 package entity;
+
 import java.util.Random;
 
-// คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท
-public abstract class Monster {
-    private final int size; // ขนาดของมอนสเตอร์
-    protected int x;        // ตำแหน่งแกน X
-    protected int y;        // ตำแหน่งแกน Y
-
-    // Constructor สำหรับกำหนดขนาดของมอนสเตอร์
-    protected Monster(int size) {
-        this.size = size;
-    }
-
-    // Getter สำหรับตำแหน่ง X
-    public int getX() { return x; }
-
-    // Getter สำหรับตำแหน่ง Y
-    public int getY() { return y; }
-
-    // Getter สำหรับขนาดมอนสเตอร์
-    public int getSize() { return size; }
-
-    // ฟังก์ชันสุ่มเกิดมอนสเตอร์ที่มุมของหน้าจอ
-    public void spawn(Random random, int panelWidth, int panelHeight) {
-        int[][] corners = new int[][] {
-            {10, 10},
-            {panelWidth - size - 10, 10},
-            {10, panelHeight - size - 10},
-            {panelWidth - size - 10, panelHeight - size - 10}
-        };
-
+    /**
+     * คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท
+     * รวมระบบเปิด/ปิดตามด่านแทน MonsterController เดิม
+     */
+    public abstract class Monster extends Sprite {
+        private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
+        private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
+        private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
+        private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
         // เลือกมุมแบบสุ่ม
-        int[] corner = corners[random.nextInt(corners.length)];
-        x = corner[0];
-        y = corner[1];
+    protected Monster(int size, int speed) {
+        super(size, speed);
+    }
+    /**
+     * กำหนดว่ามอนสเตอร์ตัวนี้จะปรากฏในด่านใดบ้าง
+     * @param totalLevels จำนวนด่านทั้งหมดของเกม
+     * @param levelGroups รายการ index ของด่าน (กำหนดหลายชุดได้)
+     */
+    public void setActiveLevels(int totalLevels, int[]... levelGroups) {
+        this.activeLevels = buildActiveLevelMap(totalLevels, levelGroups);
     }
 
-    // ฟังก์ชัน abstract ที่ subclass ต้อง override เพื่ออัปเดตพฤติกรรม
-    public abstract void update(int playerX, int playerY, int panelWidth, int panelHeight);
+    /** เรียกทุกครั้งเมื่อเข้าสู่ด่านใหม่เพื่อเตรียมมอนสเตอร์ให้พร้อม */
+    public void prepareForLevel(int levelIndex, Random random, int panelWidth, int panelHeight) {
+        updateBounds(panelWidth, panelHeight);
+        active = levelIndex >= 0 && levelIndex < activeLevels.length && activeLevels[levelIndex];
+        if (!active) {
+            return;
+        }
+        spawnAtRandomCorner(random);
+        onLevelActivated(random);
+    }
+    /** Hook สำหรับ subclass ใช้ตั้งค่าพิเศษหลัง spawn (เช่น สั่งปล่อยวงสตันทันที) */
+    protected void onLevelActivated(Random random) {
+        // ค่าเริ่มต้นไม่ทำอะไร
+    }
+    /** อัปเดตพฤติกรรมของมอนสเตอร์ในแต่ละเฟรม (เรียกเฉพาะเมื่อ active) */
+    public final void update(int playerX, int playerY) {
+        if (!active) {
+            return;
+        }
+        behave(playerX, playerY);
+    }
 
-    // เคลื่อนที่เข้าหาผู้เล่นด้วยความเร็ว speed
-    protected void moveTowardPlayer(int playerX, int playerY, int speed) {
-        if (playerX < x) {
-            x -= speed;
-        } else if (playerX > x) {
-            x += speed;
+    /** ให้ subclass ระบุพฤติกรรมการเคลื่อนที่จริง ๆ */
+    protected abstract void behave(int playerX, int playerY);
+
+    /** มอนสเตอร์ทำงานอยู่ในด่านปัจจุบันหรือไม่ */
+    public boolean isActive() {
+        return active;
+    }
+
+    private static boolean[] buildActiveLevelMap(int totalLevels, int[]... levelGroups) {
+        int length = Math.max(0, totalLevels);
+        if (length == 0) {
+            for (int[] group : levelGroups) {
+                if (group == null) {
+                    continue;
+                }
+                for (int idx : group) {
+                    length = Math.max(length, idx + 1);
+                }
+            }
         }
 
-        if (playerY < y) {
-            y -= speed;
-        } else if (playerY > y) {
-            y += speed;
+        boolean[] result = new boolean[length];
+        for (int[] group : levelGroups) {
+            if (group == null) {
+                continue;
+            }
+            for (int idx : group) {
+                if (idx >= 0 && idx < result.length) {
+                    result[idx] = true;
+                }
+            }
         }
-    }
-
-    // ป้องกันไม่ให้มอนสเตอร์หลุดขอบจอ
-    protected void clampToBounds(int panelWidth, int panelHeight) {
-        x = Math.max(0, Math.min(panelWidth - size, x));
-        y = Math.max(0, Math.min(panelHeight - size, y));
-    }
-
-    // ตรวจสอบการชนกับวัตถุอื่น (เช่น ผู้เล่น)
-    public boolean intersects(int otherX, int otherY, int otherSize) {
-        return x < otherX + otherSize &&
-               x + size > otherX &&
-               y < otherY + otherSize &&
-               y + size > otherY;
+        return result;    
     }
 }

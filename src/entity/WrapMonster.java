@@ -1,27 +1,28 @@
 package entity;
+
 // มอนสเตอร์ที่วาร์ปทะลุขอบจอได้
 public class WrapMonster extends Monster {
-    private final int speed; // ความเร็วคงที่ของมอนสเตอร์
 
     // Constructor สำหรับกำหนดขนาดและความเร็ว
     public WrapMonster(int size, int speed) {
-        super(size);
-        this.speed = speed;
+        super(size, speed);
     }
 
     // อัปเดตตำแหน่งมอนสเตอร์แต่ละเฟรม
     @Override
-    public void update(int playerX, int playerY, int panelWidth, int panelHeight) {
+    protected void behave(int playerX, int playerY) {
         // เคลื่อนที่เข้าหาผู้เล่น
-        moveTowardPlayer(playerX, playerY, speed);
+        moveToward(playerX, playerY, getSpeed());
         // วาร์ปกลับเมื่อออกนอกขอบจอ
-        wrapWithinBounds(panelWidth, panelHeight);
+        wrapWithinBounds();
     }
 
     // ฟังก์ชันย้ายตำแหน่งกลับอีกด้านถ้าออกนอกจอ
-    private void wrapWithinBounds(int panelWidth, int panelHeight) {
+    private void wrapWithinBounds() {
         int size = getSize();
-
+        int panelWidth = getPanelWidth();
+        int panelHeight = getPanelHeight();
+        
         // ถ้าออกซ้าย → ไปขวา
         if (x < 0) {
             x = panelWidth - size;

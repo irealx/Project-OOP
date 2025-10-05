@@ -1,4 +1,6 @@
 package system;
+
+import entity.Sprite;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -14,7 +16,8 @@ public class Level {
 
     private List<Door> doors = new ArrayList<>();
     private int passwordCode = 0;
-
+    private int currentPanelWidth;
+    private int currentPanelHeight;
     public Level(int doorCount, int doorSize) {
         this.doorCount = doorCount;
         this.doorSize = doorSize;
@@ -24,6 +27,8 @@ public class Level {
      * รีเซ็ตด่านใหม่ โดยจะสุ่มประตูทั้งหมดและสร้างรหัสผ่านใหม่
      */
     public void reset(Random random, int panelWidth, int panelHeight) {
+        currentPanelWidth = panelWidth;
+        currentPanelHeight = panelHeight;
         randomizeDoors(random, panelWidth, panelHeight);
     }
 
@@ -39,6 +44,52 @@ public class Level {
         for (Door door : doors) {
             door.updateAnimation();
         }
+    }
+
+    /** ตรวจว่ามีสไปรต์ชนประตูบานใดหรือไม่ */
+    public DoorHit detectDoorCollision(Sprite sprite) {
+        for (Door door : doors) {
+            int doorX = door.getX(currentPanelWidth);
+            int doorY = door.getY(currentPanelHeight);
+            if (sprite.intersects(doorX, doorY, doorSize, doorSize)) {
+                return new DoorHit(door);
+            }
+        }
+        return null;
+    }
+
+    /** ตรวจว่ารหัสผ่านที่กรอกมาตรงกับรหัสของด่านนี้หรือไม่ */
+    public boolean validatePassword(String input) {
+        if (input == null) {
+            return false;
+        }
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        if (trimmed.equals(getFormattedPassword())) {
+            return true;
+        }
+        try {
+            return Integer.parseInt(trimmed) == passwordCode;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
+    }
+
+    /** คืนค่ารหัสผ่านในรูปแบบ 2 หลักเพื่อแสดงผล */
+    public String getFormattedPassword() {
+        return String.format("%02d", passwordCode);
+    }
+
+    /** ดันสไปรต์ให้ออกจากประตูเพื่อกันการชนซ้ำ */
+    public void pushSpriteAwayFromDoor(Sprite sprite, Door door) {
+        if (door == null) {
+            return;
+        }
+        int doorX = door.getX(currentPanelWidth);
+        int doorY = door.getY(currentPanelHeight);
+        sprite.pushOutsideSquare(doorX, doorY, doorSize);
     }
 
     private void randomizeDoors(Random random, int panelWidth, int panelHeight) {
@@ -128,6 +179,27 @@ public class Level {
             int dx = x - other.x;
             int dy = y - other.y;
             return dx * dx + dy * dy;
+        }
+    }
+
+    /** โครงสร้างผลลัพธ์การชนประตูล่าสุด */
+    public static class DoorHit {
+        private final Door door;
+
+        private DoorHit(Door door) {
+            this.door = door;
+        }
+
+        public Door getDoor() {
+            return door;
+        }
+
+        public Door.Type getType() {
+            return door.getType();
+        }
+
+        public Integer getPuzzleNumber() {
+            return door.getPuzzleNumber();
         }
     }
 }

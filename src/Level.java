@@ -49,10 +49,12 @@ public class Level {
         }
         Collections.shuffle(types, random);
 
+        // สุ่มตำแหน่งของประตูโดยพยายามไม่ให้ทับกัน
         List<Point> points = generateDistinctDoorPositions(random, panelWidth, panelHeight);
         doors = new ArrayList<>();
         passwordCode = 0;
 
+        // เตรียมตัวเลขไว้สำหรับประตูปริศนา โดยเลือกมาสูงสุด 4 ตัวเลข
         List<Integer> puzzlePool = new ArrayList<>();
         for (int i = 1; i <= 9; i++) {
             puzzlePool.add(i);
@@ -104,6 +106,7 @@ public class Level {
         }
 
         while (points.size() < doorCount) {
+            // ถ้าพยายามสุ่มไม่สำเร็จก็ใช้ตำแหน่งสำรองเพื่อไม่ให้จำนวนประตูขาด
             int fallbackX = Math.min(panelWidth - doorSize, 60 * points.size());
             int fallbackY = Math.min(panelHeight - doorSize, 100 + 40 * points.size());
             points.add(new Point(Math.max(0, fallbackX), Math.max(0, fallbackY)));

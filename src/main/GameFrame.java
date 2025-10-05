@@ -3,7 +3,6 @@ package main;
 import java.awt.Dimension;
 import java.awt.Toolkit;
 import javax.swing.JFrame;
-import system.Config;
 
 /**
  * GameFrame — หน้าต่างหลักของเกม

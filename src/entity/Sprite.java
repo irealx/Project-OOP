@@ -2,217 +2,120 @@ package entity;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 
-/**
- * คลาสแม่สำหรับวัตถุที่เคลื่อนไหวได้ในฉาก (ผู้เล่น/มอนสเตอร์)
- * รวมการคำนวณตำแหน่ง การชน และการวาดพื้นฐานให้ใช้ร่วมกัน
- */
-public abstract class Sprite {
+import system.Config;
+import system.Utils;
 
-    // พิกัดมุมซ้ายบนของสไปรต์บนฉาก
+// REFACTOR: Sprite.java เก็บโค้ดพื้นฐานที่ทุกตัวละครใช้ร่วมกัน เช่น การเคลื่อนไหวและการชน
+public abstract class Sprite {
     protected int x;
     protected int y;
 
-    private final int size;      // ขนาด hitbox สี่เหลี่ยมของสไปรต์
-    private final int speed;     // ความเร็วพื้นฐาน (ใช้กับการเคลื่อนที่ทั่วไป)
-    private int panelWidth;      // ความกว้างฉากปัจจุบัน
-    private int panelHeight;     // ความสูงฉากปัจจุบัน
-
+    protected int dx;
+    protected int dy;
+    protected int speed;
+    protected int size;
+    protected int panelWidth = Config.PANEL_WIDTH;
+    protected int panelHeight = Config.PANEL_HEIGHT;
+    private BufferedImage frame;
+    private Color fallbackColor = Color.WHITE;
     protected Sprite(int size, int speed) {
         this.size = size;
         this.speed = speed;
     }
-
-    /** ปรับขนาดฉากที่สไปรต์สามารถเคลื่อนที่ได้ และบีบตำแหน่งให้อยู่ในกรอบ */
-    public void updateBounds(int panelWidth, int panelHeight) {
-        this.panelWidth = Math.max(size, panelWidth);
-        this.panelHeight = Math.max(size, panelHeight);
-        clampToBounds();
+    public void setFrame(BufferedImage frame, Color fallback) {
+        this.frame = frame;
+        if (fallback != null) {
+            this.fallbackColor = fallback;
+        }
     }
-
-    /** จัดตำแหน่งให้อยู่กลางหน้าจอ (ใช้ตอนรีเซ็ตหรือเกิดใหม่) */
-    public void centerOnScreen() {
-        setPosition(panelWidth / 2 - size / 2, panelHeight / 2 - size / 2);
+    public void updateBounds(int width, int height) {
+        panelWidth = Math.max(size, width);
+        panelHeight = Math.max(size, height);
+        clamp();
     }
-
-    /** ตั้งตำแหน่งใหม่โดยตรง แล้วบีบให้อยู่ในกรอบ */
-    protected void setPosition(int newX, int newY) {
-        this.x = newX;
-        this.y = newY;
-        clampToBounds();
+    protected void setPosition(int nx, int ny) {
+        x = nx;
+        y = ny;
+        clamp();
     }
 
     /** เคลื่อนที่ด้วยค่า dx, dy ตรง ๆ พร้อมกัน แล้วบีบให้อยู่ในกรอบ */
-    protected void moveBy(int dx, int dy) {
-        this.x += dx;
-        this.y += dy;
-        clampToBounds();
+    protected void setVelocity(int ndx, int ndy) {
+        dx = ndx;
+        dy = ndy;
     }
-
-    /** เคลื่อนที่เข้าหาจุดเป้าหมายด้วยความเร็วพื้นฐานของสไปรต์ */
-    protected void moveToward(int targetX, int targetY) {
-        moveToward(targetX, targetY, speed);
+    protected void center() {
+        setPosition((panelWidth - size) / 2, (panelHeight - size) / 2);
     }
-
-    /** เคลื่อนที่เข้าหาจุดเป้าหมายด้วยความเร็วที่กำหนดเอง */
-    protected void moveToward(int targetX, int targetY, int customSpeed) {
-        int vx = 0;
-        int vy = 0;
-
-        if (targetX < x) {
-            vx = -customSpeed;
-        } else if (targetX > x) {
-            vx = customSpeed;
-        }
-
-        if (targetY < y) {
-            vy = -customSpeed;
-        } else if (targetY > y) {
-            vy = customSpeed;
-        }
-
-        moveBy(vx, vy);
+    protected void clamp() {
+        x = Utils.clamp(x, 0, panelWidth - size);
+        y = Utils.clamp(y, 0, panelHeight - size);
     }
-    /** บังคับให้อยู่ในขอบเขตของฉาก */
-    public void clampToBounds() {
-        x = Math.max(0, Math.min(panelWidth - size, x));
-        y = Math.max(0, Math.min(panelHeight - size, y));
+    protected void wrap() {
+        if (x < -size) x = panelWidth - Config.WRAP_MARGIN;
+        if (x > panelWidth) x = Config.WRAP_MARGIN;
+        if (y < -size) y = panelHeight - Config.WRAP_MARGIN;
+        if (y > panelHeight) y = Config.WRAP_MARGIN;
     }
-
-    /** สุ่มเกิดตามมุมของฉาก (ใช้กับมอนสเตอร์) */
-    public void spawnAtRandomCorner(Random random) {
-        int[][] corners = new int[][] {
-            {10, 10},
-            {Math.max(0, panelWidth - size - 10), 10},
-            {10, Math.max(0, panelHeight - size - 10)},
-            {Math.max(0, panelWidth - size - 10), Math.max(0, panelHeight - size - 10)}
-        };
-        int[] corner = corners[random.nextInt(corners.length)];
-        setPosition(corner[0], corner[1]);
+    protected void follow(int targetX, int targetY, int customSpeed) {
+        dx = Integer.compare(targetX, x) * customSpeed;
+        dy = Integer.compare(targetY, y) * customSpeed;
     }
-
-    /** ตรวจการชนกับสี่เหลี่ยมอื่น ๆ */
-    public boolean intersects(int otherX, int otherY, int otherWidth, int otherHeight) {
-        return x < otherX + otherWidth &&
-               x + size > otherX &&
-               y < otherY + otherHeight &&
-               y + size > otherY;
+    protected void follow(int targetX, int targetY) {
+        follow(targetX, targetY, speed);
     }
-
-    /** ตรวจการชนกับสไปรต์อีกตัว */
-    public boolean intersects(Sprite other) {
-        return intersects(other.x, other.y, other.size, other.size);
-    }
-
-    /** ดันตัวสไปรต์ให้ออกจากพื้นที่สี่เหลี่ยมที่กำหนด (ใช้หลังชนประตู) */
-    public void pushOutsideRect(int rectX, int rectY, int rectWidth, int rectHeight) {
-        if (!intersects(rectX, rectY, rectWidth, rectHeight)) {
+    public void pushOutside(int rectX, int rectY, int rectW, int rectH) {
+        if (!intersects(rectX, rectY, rectW, rectH)) {
             return;
         }
-
         int right = x + size;
         int bottom = y + size;
-        int rectRight = rectX + rectWidth;
-        int rectBottom = rectY + rectHeight;
-
+        int rectRight = rectX + rectW;
+        int rectBottom = rectY + rectH;
         int overlapLeft = right - rectX;
         int overlapRight = rectRight - x;
         int overlapTop = bottom - rectY;
         int overlapBottom = rectBottom - y;
-
-        int minOverlap = Math.min(Math.min(overlapLeft, overlapRight), Math.min(overlapTop, overlapBottom));
-
-        if (minOverlap == overlapLeft) {
+        int min = Math.min(Math.min(overlapLeft, overlapRight), Math.min(overlapTop, overlapBottom));
+        if (min == overlapLeft) {
             x = rectX - size - 1;
-        } else if (minOverlap == overlapRight) {
+        } else if (min == overlapRight) {
             x = rectRight + 1;
-        } else if (minOverlap == overlapTop) {
+        } else if (min == overlapTop) {
             y = rectY - size - 1;
         } else {
             y = rectBottom + 1;
         }
-
-        clampToBounds();
+        clamp();
     }
-
-    /** ดันออกจากสี่เหลี่ยมจัตุรัส (ช่วยให้อ่านโค้ดง่ายขึ้น) */
-    public void pushOutsideSquare(int rectX, int rectY, int rectSize) {
-        pushOutsideRect(rectX, rectY, rectSize, rectSize);
+    protected void updateBase() {
+        if (dx != 0 || dy != 0) {
+            x += dx;
+            y += dy;
+        }
+        dx = dy = 0;
     }
-
-    /** วาดสี่เหลี่ยมสีเรียบ (ใช้เป็น fallback หรือวัตถุอย่างมอนสเตอร์) */
-    public void drawAsBox(Graphics2D g2d, Color color) {
-        g2d.setColor(color);
-        g2d.fillRect(x, y, size, size);
-    }
-    
-    /**
-     * วาดเฟรมภาพสไปรต์พร้อมขยายให้ใหญ่กว่าขนาด hitbox เล็กน้อย
-     * @param g2d กราฟิกที่ใช้วาด
-     * @param frame ภาพเฟรม (null = ใช้สีสำรอง)
-     * @param facingLeft หันซ้ายอยู่หรือไม่
-     * @param fallbackColor สีสำรองเมื่อไม่มีภาพให้วาด
-     */
-    protected void drawFrame(Graphics2D g2d, BufferedImage frame, boolean facingLeft, Color fallbackColor) {
-        if (frame == null) {
-            drawAsBox(g2d, fallbackColor);
+    protected void drawBase(Graphics2D g) {
+        if (frame != null) {
+            g.drawImage(frame, x, y, size, size, null);
             return;
         }
-
-        double spriteScale = 12; // ขยายสไปรต์ให้ใหญ่กว่ากล่องชน
-        double scaleX = spriteScale * size / (double) frame.getWidth();
-        double scaleY = spriteScale * size / (double) frame.getHeight();
-        AffineTransform transform = new AffineTransform();
-        double centerX = x + size / 2.0;
-        double centerY = y + size / 2.0;
-        transform.translate(centerX, centerY);
-        if (facingLeft) {
-            transform.scale(-scaleX, scaleY);
-        } else {
-            transform.scale(scaleX, scaleY);
-        }
-        transform.translate(-frame.getWidth() / 2.0, -frame.getHeight() / 2.0);
-
-        g2d.drawImage(frame, transform, null);
+        g.setColor(fallbackColor);
+        g.fillRect(x, y, size, size);
     }
-
-
-    public static void drawPlayer(Graphics2D g2d, BufferedImage frame, int x, int y,
-                                  int hitboxSize, boolean facingLeft, Color fallbackColor) {
-        if (frame == null) {
-            // ถ้าไม่มีภาพให้ใช้สี่เหลี่ยมสีแทนเพื่อไม่ให้วัตถุหาย
-            g2d.setColor(fallbackColor);
-            g2d.fillRect(x, y, hitboxSize, hitboxSize);
-            return;
-        }
-
-        double spriteScale = 12; // อัตราส่วนขยายของสไปรต์จาก hitbox เดิม
-        double scaleX = spriteScale * hitboxSize / (double) frame.getWidth();
-        double scaleY = spriteScale * hitboxSize / (double) frame.getHeight();
-
-        AffineTransform transform = new AffineTransform();
-        double centerX = x + hitboxSize / 2.0;
-        double centerY = y + hitboxSize / 2.0;
-        transform.translate(centerX, centerY);
-        if (facingLeft) {
-            transform.scale(-scaleX, scaleY);
-        } else {
-            transform.scale(scaleX, scaleY);
-        }
-        transform.translate(-frame.getWidth() / 2.0, -frame.getHeight() / 2.0);
-
-        g2d.drawImage(frame, transform, null);
+    public boolean intersects(Sprite other) {
+        return other != null && intersects(other.x, other.y, other.size, other.size);
     }
-    // ---------- Getter พื้นฐาน ----------
+    public boolean intersects(int ox, int oy, int ow, int oh) {
+        return x < ox + ow && x + size > ox && y < oy + oh && y + size > oy;
+    }
     public int getX() { return x; }
     public int getY() { return y; }
     public int getCenterX() { return x + size / 2; }
     public int getCenterY() { return y + size / 2; }
     public int getSize() { return size; }
     public int getSpeed() { return speed; }
-    public int getPanelWidth() { return panelWidth; }
-    public int getPanelHeight() { return panelHeight; }
 }

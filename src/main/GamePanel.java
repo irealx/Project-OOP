@@ -2,9 +2,6 @@ package main;
 
 import entity.Monster;
 import entity.Player;
-import entity.ShootingMonster;
-import entity.StunMonster;
-import entity.WrapMonster;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -24,87 +21,55 @@ import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import system.Config;
 import system.Door;
 import system.Level;
 import system.Level.DoorHit;
 import system.Lighting;
-import system.Lighting.LightSource;
 import system.Puzzle;
 
-/**
- * GamePanel ดูแลการอัปเดตและวาดผลทุกเฟรมของเกม
- */
+// REFACTOR: ทำให้ลำดับการวาดภาพเป็นระบบเดียวกัน แก้ไขง่ายและลดความซับซ้อน
 public class GamePanel extends JPanel implements ActionListener {
 
-    public static final int DEFAULT_WIDTH = 800;
-    public static final int DEFAULT_HEIGHT = 600;
-
-    private static final int PLAYER_SIZE = 10;
-    private static final int MONSTER_SIZE = 32;
-    private static final int DOOR_SIZE = 48;
-    private static final int PLAYER_SPEED = 4;
-    private static final int MONSTER_SPEED = 2;
-
-    private static final int PLAYER_LIGHT_RADIUS = 160;
-    private static final int MONSTER_LIGHT_RADIUS = 120;
-
-    static final int TOTAL_LEVELS = 6;
-    private static final int DOORS_PER_LEVEL = 6;
-
-    private final Timer timer;
     private final Random random = new Random();
 
-    private final Player player = new Player(PLAYER_SIZE, PLAYER_SPEED, DEFAULT_WIDTH, DEFAULT_HEIGHT);
-    private final List<Monster> monsters = new ArrayList<>();
+    private final Player player = new Player();
+    private final List<Monster> monsters = Monster.createDefaultMonsters();
     private final List<Level> levels = new ArrayList<>();
-
     private final Puzzle puzzle = new Puzzle();
-    private final Color monsterColor = new Color(0xEE82EE);
-
-    private BufferedImage backgroundImage;
-
-    private int panelWidth = DEFAULT_WIDTH;
-    private int panelHeight = DEFAULT_HEIGHT;
-    private int currentLevelIndex = 0;
-    private Integer pendingLevelReset = null;
-    private boolean doorInteractionActive = false;
-    private DoorHit activeDoorHit = null;
-
+    private BufferedImage background;
+    private int width = Config.PANEL_WIDTH;
+    private int height = Config.PANEL_HEIGHT;
+    private int levelIndex;
+    private Integer pendingReset;
+    private DoorHit activeDoor;
     public GamePanel() {
-        setBackground(Color.BLACK);
         setFocusable(true);
-        loadBackground();
-        initMonsters();
-        initLevels();
-        resetForLevel(0);
+        setBackground(Config.BACKGROUND_COLOR);
+        background = load("Pic/Background.png");
+        for (int i = 0; i < Config.TOTAL_LEVELS; i++) {
+            levels.add(new Level(Config.DOOR_PER_LEVEL, Config.DOOR_SIZE));
+        }
         setupKeyboard();
-
-        timer = new Timer(16, this);
-        timer.start();
+        resetLevel(0);
+        new Timer(Config.TIMER_DELAY_MS, this).start();
     }
-
-    private void loadBackground() {
+    private BufferedImage load(String path) {
         try {
-            backgroundImage = ImageIO.read(new File("Pic/Background.png"));
-        } catch (IOException e) {
-            System.err.println("ไม่สามารถโหลดภาพพื้นหลังได้: " + e.getMessage());
-            backgroundImage = null;
+            return ImageIO.read(new File(path));
+        } catch (IOException ex) {
+            return null;
         }
     }
-
     private void setupKeyboard() {
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                int keyCode = e.getKeyCode();
-                if (doorInteractionActive && activeDoorHit != null && activeDoorHit.getType() == Door.Type.PUZZLE) {
-                    if (isMovementKey(keyCode)) {
-                        closePuzzleOverlay();
-                    } else {
-                        return;
-                    }
+                if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE && isMovementKey(e.getKeyCode())) {
+                    closeInteraction(levels.get(levelIndex));
+                } else {
+                    player.handleKeyPressed(e.getKeyCode());
                 }
-                player.handleKeyPressed(keyCode);
             }
 
             @Override
@@ -113,20 +78,10 @@ public class GamePanel extends JPanel implements ActionListener {
             }
         });
     }
-
     public void setGameSize(int width, int height) {
-        int minWidth = DOOR_SIZE + 100;
-        int minHeight = DOOR_SIZE + 150;
-        int newWidth = Math.max(minWidth, width);
-        int newHeight = Math.max(minHeight, height);
-
-        if (newWidth == panelWidth && newHeight == panelHeight) {
-            return;
-        }
-
-        panelWidth = newWidth;
-        panelHeight = newHeight;
-        resetForLevel(currentLevelIndex);
+        this.width = Math.max(Config.DOOR_SIZE + 100, width);
+        this.height = Math.max(Config.DOOR_SIZE + 150, height);
+        resetLevel(levelIndex);
         revalidate();
         repaint();
     }
@@ -136,283 +91,138 @@ public class GamePanel extends JPanel implements ActionListener {
         super.addNotify();
         requestFocusInWindow();
     }
-
-    private void initMonsters() {
-        StunMonster stunMonster = new StunMonster(MONSTER_SIZE, MONSTER_SPEED);
-        stunMonster.setActiveLevels(TOTAL_LEVELS, new int[] { 0, 3 });
-        monsters.add(stunMonster);
-
-        WrapMonster wrapMonster = new WrapMonster(MONSTER_SIZE, MONSTER_SPEED);
-        wrapMonster.setActiveLevels(TOTAL_LEVELS, new int[] { 1, 4 });
-        monsters.add(wrapMonster);
-
-        ShootingMonster shootingMonster = new ShootingMonster(MONSTER_SIZE, MONSTER_SPEED + 1);
-        shootingMonster.setActiveLevels(TOTAL_LEVELS, new int[] { 2, 5 });
-        monsters.add(shootingMonster);
-    }
-
-    private void initLevels() {
-        for (int i = 0; i < TOTAL_LEVELS; i++) {
-            levels.add(new Level(DOORS_PER_LEVEL, DOOR_SIZE));
-        }
-    }
-
-    private void resetForLevel(int levelIndex) {
-        currentLevelIndex = levelIndex;
-        pendingLevelReset = null;
-        doorInteractionActive = false;
-        activeDoorHit = null;
-        puzzle.clearActivePuzzle();
-
-        player.updateBounds(panelWidth, panelHeight);
+    private void resetLevel(int index) {
+        levelIndex = index;
+        pendingReset = null;
+        activeDoor = null;
+        puzzle.clear();
+        Level level = levels.get(levelIndex);
+        level.reset(width, height);
+        player.updateBounds(width, height);
         player.spawn();
 
-        Level level = getCurrentLevel();
-        level.reset(random, panelWidth, panelHeight);
-
         for (Monster monster : monsters) {
-            monster.prepareForLevel(levelIndex, random, panelWidth, panelHeight);
+            monster.prepareForLevel(levelIndex, random, width, height);
         }
-    }
-
-    private Level getCurrentLevel() {
-        return levels.get(currentLevelIndex);
     }
 
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        Graphics2D g2d = (Graphics2D) g;
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        List<LightSource> lights = collectLightSources();
-
-        drawBackground(g2d);
-        drawDoors(g2d, lights);
-        drawPlayer(g2d);
-        drawMonsters(g2d);
-        drawLighting(g2d, lights);
-        drawStunEffects(g2d);
-        drawLevelInfo(g2d);
-        drawPuzzleOverlay(g2d);
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        List<Lighting.LightSource> lights = Lighting.collect(player, monsters);
+        renderBaseSprites(g2, lights);
+        renderLighting(g2, lights);
+        renderOverlays(g2);
+        renderUI(g2);
     }
-
-    private void drawBackground(Graphics2D g2d) {
-        if (backgroundImage != null) {
-            g2d.drawImage(backgroundImage, 0, 0, panelWidth, panelHeight, null);
+    private void renderBaseSprites(Graphics2D g2, List<Lighting.LightSource> lights) {
+        if (background != null) {
+            g2.drawImage(background, 0, 0, width, height, null);
         } else {
-            g2d.setColor(Color.BLACK);
-            g2d.fillRect(0, 0, panelWidth, panelHeight);
+            g2.setColor(Config.BACKGROUND_COLOR);
+            g2.fillRect(0, 0, width, height);
         }
-    }
-
-    private void drawDoors(Graphics2D g2d, List<LightSource> lights) {
-        Level level = getCurrentLevel();
+        Level level = levels.get(levelIndex);
         for (Door door : level.getDoors()) {
-            int doorCenterX = door.getX(panelWidth) + DOOR_SIZE / 2;
-            int doorCenterY = door.getY(panelHeight) + DOOR_SIZE / 2;
-            if (!Lighting.isPointLit(doorCenterX, doorCenterY, lights)) {
-                continue;
+            int cx = door.getX(width) + Config.DOOR_SIZE / 2;
+            int cy = door.getY(height) + Config.DOOR_SIZE / 2;
+            if (Lighting.isPointLit(cx, cy, lights)) {
+                door.draw(g2, width, height);
             }
-            door.draw(g2d, panelWidth, panelHeight);
         }
-    }
-
-    private void drawPlayer(Graphics2D g2d) {
-        player.draw(g2d);
-    }
-
-    private void drawMonsters(Graphics2D g2d) {
+        player.draw(g2);
         for (Monster monster : monsters) {
-            if (monster.isActive()) {
-                monster.drawAsBox(g2d, monsterColor);
-            }
+            monster.draw(g2);
         }
     }
-
-    private void drawLighting(Graphics2D g2d, List<LightSource> lights) {
-        BufferedImage darkness = Lighting.createLightingMask(panelWidth, panelHeight, lights);
-        g2d.drawImage(darkness, 0, 0, null);
+    private void renderLighting(Graphics2D g2, List<Lighting.LightSource> lights) {
+        g2.drawImage(Lighting.createMask(width, height, lights), 0, 0, null);
     }
-
-    private void drawStunEffects(Graphics2D g2d) {
-        for (Monster monster : monsters) {
-            if (monster.isActive() && monster instanceof StunMonster) {
-                ((StunMonster) monster).drawStun(g2d);
-            }
+    private void renderOverlays(Graphics2D g2) {
+        if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE) {
+            puzzle.draw(g2, width, height);
         }
     }
-
-    private void drawLevelInfo(Graphics2D g2d) {
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 20));
-        g2d.drawString("Level " + (currentLevelIndex + 1), 20, 30);
-    }
-
-    private void drawPuzzleOverlay(Graphics2D g2d) {
-        if (!doorInteractionActive || activeDoorHit == null || activeDoorHit.getType() != Door.Type.PUZZLE) {
-            return;
-        }
-        puzzle.drawOverlay(g2d, panelWidth, panelHeight);
-    }
-
-    private List<LightSource> collectLightSources() {
-        List<LightSource> lights = new ArrayList<>();
-        lights.add(new LightSource(player.getCenterX(), player.getCenterY(), PLAYER_LIGHT_RADIUS));
-        for (Monster monster : monsters) {
-            if (monster.isActive()) {
-                lights.add(new LightSource(monster.getCenterX(), monster.getCenterY(), MONSTER_LIGHT_RADIUS));
-            }
-        }
-        return lights;
+    private void renderUI(Graphics2D g2) {
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("SansSerif", Font.BOLD, 20));
+        g2.drawString("Level " + (levelIndex + 1), 20, 30);
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        Level level = getCurrentLevel();
-        level.updateDoorAnimations();
-
-        if (!doorInteractionActive || player.isDead()) {
+        Level level = levels.get(levelIndex);
+        level.getDoors().forEach(Door::updateAnimation);
+        if (activeDoor == null || player.isDead()) {
             player.update();
         }
-
-        if (pendingLevelReset != null && player.isDeathAnimationFinished()) {
-            resetForLevel(pendingLevelReset);
-            pendingLevelReset = null;
+        if (pendingReset != null && player.isDeathAnimationFinished()) {
+            resetLevel(pendingReset);
             repaint();
             return;
         }
-
         if (player.isDead()) {
             repaint();
             return;
         }
-
-        if (doorInteractionActive) {
+        if (activeDoor != null) {
             repaint();
             return;
         }
-
-        for (Monster monster : monsters) {
-            monster.update(player.getX(), player.getY());
-        }
-
-        updateStunEffects();
-        checkDoorCollisions();
-        checkMonsterCollisions();
-
+        Monster.updateAll(monsters, player, level);
+        handleCollisions(level);
         repaint();
     }
-
-    private void updateStunEffects() {
-        if (player.isDead()) {
-            return;
-        }
-        for (Monster monster : monsters) {
-            if (!monster.isActive()) {
-                continue;
-            }
-            if (monster instanceof StunMonster) {
-                StunMonster stunMonster = (StunMonster) monster;
-                if (stunMonster.isPlayerInStun(player.getX(), player.getY(), PLAYER_SIZE) && !player.isStunned()) {
-                    player.applyStun(stunMonster.getStunDurationTicks());
-                }
-            }
-        }
-    }
-
-    private void checkDoorCollisions() {
-        if (player.isDead() || doorInteractionActive) {
-            return;
-        }
-        Level level = getCurrentLevel();
+    private void handleCollisions(Level level) {
         DoorHit hit = level.detectDoorCollision(player);
         if (hit != null) {
-            handleDoorCollision(level, hit);
-        }
-    }
-
-    private void handleDoorCollision(Level level, DoorHit hit) {
-        doorInteractionActive = true;
-        activeDoorHit = hit;
-        player.stopImmediately();
-
-        switch (hit.getType()) {
-            case PUZZLE:
-                puzzle.showPuzzle(hit.getPuzzleNumber());
-                break;
-            case ADVANCE:
-            case BACK:
-                puzzle.clearActivePuzzle();
-                promptDoorPassword(level, hit);
-                break;
-        }
-        repaint();
-    }
-
-    private void promptDoorPassword(Level level, DoorHit hit) {
-        String message = "Please enter password";
-        String input = JOptionPane.showInputDialog(this, message, "รหัสประตู", JOptionPane.QUESTION_MESSAGE);
-
-        if (level.validatePassword(input)) {
-            if (hit.getType() == Door.Type.ADVANCE) {
-                int nextLevel = (currentLevelIndex + 1) % TOTAL_LEVELS;
-                resetForLevel(nextLevel);
-            } else {
-                int prevLevel = (currentLevelIndex - 1 + TOTAL_LEVELS) % TOTAL_LEVELS;
-                resetForLevel(prevLevel);
+             activeDoor = hit;
+            player.stopImmediately();
+            if (hit.type() == Door.Type.PUZZLE) {
+                puzzle.show(hit.puzzleNumber());
+                return;
             }
-            requestFocusInWindow();
-            return;
-        }
-
-        if (input != null) {
-            JOptionPane.showMessageDialog(this,
-                    "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
-                    "รหัสผิดพลาด",
-                    JOptionPane.WARNING_MESSAGE);
-        }
-
-        level.pushSpriteAwayFromDoor(player, hit.getDoor());
-        clearDoorInteractionState();
-        repaint();
-    }
-
-    private void closePuzzleOverlay() {
-        Level level = getCurrentLevel();
-        level.pushSpriteAwayFromDoor(player, activeDoorHit != null ? activeDoorHit.getDoor() : null);
-        clearDoorInteractionState();
-        repaint();
-    }
-
-    private void clearDoorInteractionState() {
-        doorInteractionActive = false;
-        activeDoorHit = null;
-        puzzle.clearActivePuzzle();
-        requestFocusInWindow();
-    }
-
-    private void checkMonsterCollisions() {
-        if (player.isDead()) {
+            puzzle.clear();
+            promptPassword(level, hit);
             return;
         }
         for (Monster monster : monsters) {
             if (monster.isActive() && player.intersects(monster)) {
                 player.die();
-                pendingLevelReset = 0;
+                pendingReset = 0;
                 break;
-            }
         }
     }
-
-    private boolean isMovementKey(int keyCode) {
-        return keyCode == KeyEvent.VK_LEFT
-                || keyCode == KeyEvent.VK_RIGHT
-                || keyCode == KeyEvent.VK_UP
-                || keyCode == KeyEvent.VK_DOWN
-                || keyCode == KeyEvent.VK_A
-                || keyCode == KeyEvent.VK_D
-                || keyCode == KeyEvent.VK_W
-                || keyCode == KeyEvent.VK_S;
+    private void promptPassword(Level level, DoorHit hit) {
+        String input = JOptionPane.showInputDialog(this, "Please enter password", "รหัสประตู", JOptionPane.QUESTION_MESSAGE);
+        if (level.validatePassword(input)) {
+            int next = hit.type() == Door.Type.ADVANCE
+                    ? (levelIndex + 1) % Config.TOTAL_LEVELS
+                    : (levelIndex - 1 + Config.TOTAL_LEVELS) % Config.TOTAL_LEVELS;
+            resetLevel(next);
+            requestFocusInWindow();
+            return;
+        }
+        if (input != null) {
+            JOptionPane.showMessageDialog(this, "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ", "รหัสผิดพลาด", JOptionPane.WARNING_MESSAGE);
+        }
+        closeInteraction(level);
+    }
+    private void closeInteraction(Level level) {
+        if (activeDoor != null) {
+            level.pushAway(player, activeDoor.door());
+        }
+        activeDoor = null;
+        puzzle.clear();
+        requestFocusInWindow();
+    }
+    private boolean isMovementKey(int code) {
+        return switch (code) {
+            case KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_UP, KeyEvent.VK_DOWN,
+                 KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_W, KeyEvent.VK_S -> true;
+            default -> false;
+        };
     }
 }

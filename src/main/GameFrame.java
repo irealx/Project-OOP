@@ -5,6 +5,7 @@ import java.awt.Toolkit;           // ใช้สำหรับดึงขน
 import java.awt.event.KeyAdapter; // ใช้ตรวจจับปุ่มกด
 import java.awt.event.KeyEvent;   // ใช้รหัสปุ่ม (เช่น F11)
 import javax.swing.JFrame;
+import system.Config;
 
 /**
  * คลาส GameFrame: สร้างหน้าต่างหลักของเกม
@@ -12,10 +13,9 @@ import javax.swing.JFrame;
  * - เพิ่มระบบกด F11 เพื่อสลับโหมด Fullscreen ↔ Window
  */
 public class GameFrame extends JFrame {
-
     private boolean fullscreen = false; // ตัวแปรบอกสถานะว่าอยู่โหมดเต็มจอไหม
     private final GamePanel panel; // พาเนลหลักของเกมที่ต้องขยาย/ย่อ
-    private final Dimension windowedSize = new Dimension(GamePanel.DEFAULT_WIDTH, GamePanel.DEFAULT_HEIGHT); // ขนาดโหมดปกติ
+    private final Dimension windowedSize = new Dimension(Config.PANEL_WIDTH, Config.PANEL_HEIGHT); // ขนาดโหมดปกติ
 
     // Constructor ของ GameFrame (สร้างหน้าต่างเกม)
     public GameFrame() {
@@ -42,7 +42,6 @@ public class GameFrame extends JFrame {
         fullscreen = true;
         applyWindowState();
     }
-
     private void toggleFullscreen() {
         fullscreen = !fullscreen;
         applyWindowState();

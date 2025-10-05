@@ -1,88 +1,103 @@
 package entity;
 
+import java.awt.Graphics2D;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import system.Config;
+import system.Level;
+import system.Utils;
 
-/**
-/**
- * คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท
- * รวมระบบเปิด/ปิดตามด่านแทน MonsterController เดิม
- */
-public abstract class Monster extends Sprite {
-
-    private boolean[] activeLevels = new boolean[0]; // แผนที่ว่ามอนสเตอร์โผล่ในด่านไหนบ้าง
-    private boolean active;                          // มอนสเตอร์ทำงานอยู่ไหมในด่านปัจจุบัน
-
-    // เลือกมุมแบบสุ่ม
-    protected Monster(int size, int speed) {
-        super(size, speed);
+// REFACTOR: รวมการจัดการมอนสเตอร์ไว้ในคลาสเดียว ลดความซ้ำของโค้ดควบคุม
+public class Monster extends Sprite {
+    public enum AttackType { STUN, WRAP, SHOOT }
+    public interface AttackBehavior {
+        void attack(Monster self, Player player, Level level);
+        default void render(Graphics2D g, Monster self) {}
+        default void reset(Monster self) {}
+        default void afterUpdate(Monster self) {}
     }
+    private static final Map<AttackType, AttackBehavior> BEHAVIOURS = new EnumMap<>(AttackType.class);
 
-    /**
-     * กำหนดว่ามอนสเตอร์ตัวนี้จะปรากฏในด่านใดบ้าง
-     * 
-     * @param totalLevels จำนวนด่านทั้งหมดของเกม
-     * @param levelGroups รายการ index ของด่าน (กำหนดหลายชุดได้)
-     */
-    public void setActiveLevels(int totalLevels, int[]... levelGroups) {
-        this.activeLevels = buildActiveLevelMap(totalLevels, levelGroups);
+    static {
+        BEHAVIOURS.put(AttackType.STUN, new StunAttack());
+        BEHAVIOURS.put(AttackType.WRAP, new WrapAttack());
+        BEHAVIOURS.put(AttackType.SHOOT, new ShootAttack());
     }
-
-    /** เรียกทุกครั้งเมื่อเข้าสู่ด่านใหม่เพื่อเตรียมมอนสเตอร์ให้พร้อม */
-    public void prepareForLevel(int levelIndex, Random random, int panelWidth, int panelHeight) {
-        updateBounds(panelWidth, panelHeight);
-        active = levelIndex >= 0 && levelIndex < activeLevels.length && activeLevels[levelIndex];
+    private final AttackType type;
+    private AttackBehavior attackBehavior;
+    private final boolean[] activeLevels;
+    private boolean active;
+    public Monster(AttackType type) {
+        super(Config.MONSTER_SIZE, Config.MONSTER_SPEED[type.ordinal()]);
+        this.type = type;
+        this.activeLevels = new boolean[Config.TOTAL_LEVELS];
+        setAttackBehavior(type);
+        setFrame(null, Config.MONSTER_COLOR);
+    }
+    private void setAttackBehavior(AttackType type) {
+        attackBehavior = BEHAVIOURS.get(type);
+    }
+    public void setActiveLevels(int... levels) {
+        for (int level : levels) {
+            if (Utils.withinBounds(level, 0, activeLevels.length - 1)) {
+                activeLevels[level] = true;
+            }
+        }
+    }
+    public void prepareForLevel(int index, Random random, int width, int height) {
+        updateBounds(width, height);
+        active = Utils.withinBounds(index, 0, activeLevels.length - 1) && activeLevels[index];
         if (!active) {
             return;
         }
-        spawnAtRandomCorner(random);
-        onLevelActivated(random);
+        int spawnX = random.nextBoolean() ? 16 : width - size - 16;
+        int spawnY = random.nextBoolean() ? 16 : height - size - 16;
+        setPosition(spawnX, spawnY);
+        if (attackBehavior != null) {
+            attackBehavior.reset(this);
+        }
     }
-
-    /** Hook สำหรับ subclass ใช้ตั้งค่าพิเศษหลัง spawn (เช่น สั่งปล่อยวงสตันทันที) */
-    protected void onLevelActivated(Random random) {
-        // ค่าเริ่มต้นไม่ทำอะไร
+    public void update(Player player, Level level) {
+        if (!active || player == null || attackBehavior == null) {
+            return;
+        }
+        attackBehavior.attack(this, player, level);
+        updateBase();
+        attackBehavior.afterUpdate(this);
     }
-
-    /** อัปเดตพฤติกรรมของมอนสเตอร์ในแต่ละเฟรม (เรียกเฉพาะเมื่อ active) */
-    public final void update(int playerX, int playerY) {
+    public void draw(Graphics2D g) {
         if (!active) {
             return;
         }
-        behave(playerX, playerY);
+        drawBase(g);
+        attackBehavior.render(g, this);
     }
-
-    /** ให้ subclass ระบุพฤติกรรมการเคลื่อนที่จริง ๆ */
-    protected abstract void behave(int playerX, int playerY);
-
-    /** มอนสเตอร์ทำงานอยู่ในด่านปัจจุบันหรือไม่ */
     public boolean isActive() {
         return active;
     }
 
-    private static boolean[] buildActiveLevelMap(int totalLevels, int[]... levelGroups) {
-        int length = Math.max(0, totalLevels);
-        if (length == 0) {
-            for (int[] group : levelGroups) {
-                if (group == null) {
-                    continue;
-                }
-                for (int idx : group) {
-                    length = Math.max(length, idx + 1);
-                }
-            }
+    public AttackType getAttackType() {
+        return type;
+    }
+    public static void updateAll(List<Monster> monsters, Player player, Level level) {
+        for (Monster monster : monsters) {
+            monster.update(player, level);
         }
-
-        boolean[] result = new boolean[length];
-        for (int[] group : levelGroups) {
-            if (group == null) {
-                continue;
-            }
-            for (int idx : group) {
-                if (idx >= 0 && idx < result.length) {
-                    result[idx] = true;
-                }
-            }
-        }
-        return result;
+    }
+    public static List<Monster> createDefaultMonsters() {
+        List<Monster> list = new ArrayList<>();
+        Monster stun = new Monster(AttackType.STUN);
+        stun.setActiveLevels(0, 3);
+        Monster wrap = new Monster(AttackType.WRAP);
+        wrap.setActiveLevels(1, 4);
+        Monster shoot = new Monster(AttackType.SHOOT);
+        shoot.setActiveLevels(2, 5);
+        list.add(stun);
+        list.add(wrap);
+        list.add(shoot);
+        return list;
     }
 }

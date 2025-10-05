@@ -6,93 +6,31 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/**
- * ตัวจัดการข้อมูลของด่านแต่ละด่าน
- * รับผิดชอบเฉพาะรายการประตู การสุ่มตำแหน่ง/ประเภท การสร้างรหัสผ่าน และการรีเซ็ตด่าน
- */
+// REFACTOR: ลดบรรทัดที่ไม่จำเป็น ทำให้โค้ดอ่านง่ายและดูแลรักษาง่ายขึ้น
 public class Level {
-    private final int doorCount;
     private final int doorSize;
-
-    private List<Door> doors = new ArrayList<>();
-    private int passwordCode = 0;
-    private int currentPanelWidth;
-    private int currentPanelHeight;
+    private final int doorCount;
+    private final Random random = new Random();
+    private final List<Door> doors = new ArrayList<>();
+    private int password;
+    private int width;
+    private int height;
     public Level(int doorCount, int doorSize) {
         this.doorCount = doorCount;
         this.doorSize = doorSize;
     }
-
-    /**
-     * รีเซ็ตด่านใหม่ โดยจะสุ่มประตูทั้งหมดและสร้างรหัสผ่านใหม่
-     */
-    public void reset(Random random, int panelWidth, int panelHeight) {
-        currentPanelWidth = panelWidth;
-        currentPanelHeight = panelHeight;
-        randomizeDoors(random, panelWidth, panelHeight);
-    }
-
-    public List<Door> getDoors() {
-        return Collections.unmodifiableList(doors);
-    }
-
-    public int getPasswordCode() {
-        return passwordCode;
-    }
-
-    public void updateDoorAnimations() {
-        for (Door door : doors) {
-            door.updateAnimation();
+    public void reset(int width, int height) {
+        this.width = width;
+        this.height = height;
+        doors.clear();
+        password = 0;
+        List<Integer> pool = new ArrayList<>(Config.PUZZLE_POOL);
+        Collections.shuffle(pool, random);
+        List<Integer> selected = pool.subList(0, Math.min(4, pool.size()));
+        for (int v : selected) {
+            password += v;
         }
-    }
-
-    /** ตรวจว่ามีสไปรต์ชนประตูบานใดหรือไม่ */
-    public DoorHit detectDoorCollision(Sprite sprite) {
-        for (Door door : doors) {
-            int doorX = door.getX(currentPanelWidth);
-            int doorY = door.getY(currentPanelHeight);
-            if (sprite.intersects(doorX, doorY, doorSize, doorSize)) {
-                return new DoorHit(door);
-            }
-        }
-        return null;
-    }
-
-    /** ตรวจว่ารหัสผ่านที่กรอกมาตรงกับรหัสของด่านนี้หรือไม่ */
-    public boolean validatePassword(String input) {
-        if (input == null) {
-            return false;
-        }
-        String trimmed = input.trim();
-        if (trimmed.isEmpty()) {
-            return false;
-        }
-        if (trimmed.equals(getFormattedPassword())) {
-            return true;
-        }
-        try {
-            return Integer.parseInt(trimmed) == passwordCode;
-        } catch (NumberFormatException ex) {
-            return false;
-        }
-    }
-
-    /** คืนค่ารหัสผ่านในรูปแบบ 2 หลักเพื่อแสดงผล */
-    public String getFormattedPassword() {
-        return String.format("%02d", passwordCode);
-    }
-
-    /** ดันสไปรต์ให้ออกจากประตูเพื่อกันการชนซ้ำ */
-    public void pushSpriteAwayFromDoor(Sprite sprite, Door door) {
-        if (door == null) {
-            return;
-        }
-        int doorX = door.getX(currentPanelWidth);
-        int doorY = door.getY(currentPanelHeight);
-        sprite.pushOutsideSquare(doorX, doorY, doorSize);
-    }
-
-    private void randomizeDoors(Random random, int panelWidth, int panelHeight) {
+        Collections.shuffle(selected, random);
         List<Door.Type> types = new ArrayList<>();
         types.add(Door.Type.ADVANCE);
         types.add(Door.Type.BACK);
@@ -100,106 +38,67 @@ public class Level {
             types.add(Door.Type.PUZZLE);
         }
         Collections.shuffle(types, random);
-
-        // สุ่มตำแหน่งของประตูโดยพยายามไม่ให้ทับกัน
-        List<Point> points = generateDistinctDoorPositions(random, panelWidth, panelHeight);
-        doors = new ArrayList<>();
-        passwordCode = 0;
-
-        // เตรียมตัวเลขไว้สำหรับประตูปริศนา โดยเลือกมาสูงสุด 4 ตัวเลข
-        List<Integer> puzzlePool = new ArrayList<>();
-        for (int i = 1; i <= 9; i++) {
-            puzzlePool.add(i);
-        }
-        Collections.shuffle(puzzlePool, random);
-        List<Integer> selectedNumbers = new ArrayList<>(puzzlePool.subList(0, Math.min(4, puzzlePool.size())));
-        int sum = 0;
-        for (int value : selectedNumbers) {
-            sum += value;
-        }
-        passwordCode = sum;
-        Collections.shuffle(selectedNumbers, random);
+        List<int[]> spots = buildDoorPositions();
         int puzzleIndex = 0;
-
-        for (int i = 0; i < doorCount; i++) {
-            Point p = points.get(i);
-            Door door = new Door(types.get(i), p.x, p.y, panelWidth, panelHeight, doorSize);
-            if (door.getType() == Door.Type.PUZZLE && puzzleIndex < selectedNumbers.size()) {
-                door.setPuzzleNumber(selectedNumbers.get(puzzleIndex++));
+        for (int i = 0; i < types.size(); i++) {
+            Door.Type type = types.get(i);
+            int[] p = spots.get(i);
+            Door door = new Door(type, p[0], p[1], width, height, doorSize);
+            if (type == Door.Type.PUZZLE && puzzleIndex < selected.size()) {
+                door.setPuzzleNumber(selected.get(puzzleIndex++));
             }
             doors.add(door);
         }
     }
-
-    private List<Point> generateDistinctDoorPositions(Random random, int panelWidth, int panelHeight) {
-        List<Point> points = new ArrayList<>();
-        int attempts = 0;
-
-        while (points.size() < doorCount && attempts < 10_000) {
-            attempts++;
-            int xRange = Math.max(1, panelWidth - 100 - doorSize);
-            int yRange = Math.max(1, panelHeight - 150 - doorSize);
-
-            int x = 50 + random.nextInt(xRange);
-            int y = 80 + random.nextInt(yRange);
-            Point candidate = new Point(x, y);
-
-            boolean overlaps = false;
-            for (Point existing : points) {
-                if (existing.distanceSquared(candidate) < (doorSize + 10) * (doorSize + 10)) {
-                    overlaps = true;
-                    break;
-                }
-            }
-
-            if (!overlaps) {
-                points.add(candidate);
+    public List<Door> getDoors() {
+        return doors;
+    }
+    public DoorHit detectDoorCollision(Sprite sprite) {
+        for (Door door : doors) {
+            if (sprite.intersects(door.getX(width), door.getY(height), doorSize, doorSize)) {
+                return new DoorHit(door);
             }
         }
-
+        return null;
+    }
+    public boolean validatePassword(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        if (input.trim().equals(String.format("%02d", password))) {
+            return true;
+        }
+        try {
+            return Integer.parseInt(input.trim()) == password;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
+    }
+    public void pushAway(Sprite sprite, Door door) {
+        if (door == null) {
+            return;
+        }
+        sprite.pushOutside(door.getX(width), door.getY(height), doorSize, doorSize);
+    }
+    private List<int[]> buildDoorPositions() {
+        List<int[]> points = new ArrayList<>();
+        int attempts = 0;
+        while (points.size() < doorCount && attempts++ < 5000) {
+            int px = 50 + random.nextInt(Math.max(1, width - 100 - doorSize));
+            int py = 80 + random.nextInt(Math.max(1, height - 150 - doorSize));
+            if (points.stream().noneMatch(p -> Utils.distanceSquared(px, py, p[0], p[1]) < (doorSize + 10) * (doorSize + 10))) {
+                points.add(new int[] { px, py });
+            }
+        }
         while (points.size() < doorCount) {
-            // ถ้าพยายามสุ่มไม่สำเร็จก็ใช้ตำแหน่งสำรองเพื่อไม่ให้จำนวนประตูขาด
-            int fallbackX = Math.min(panelWidth - doorSize, 60 * points.size());
-            int fallbackY = Math.min(panelHeight - doorSize, 100 + 40 * points.size());
-            points.add(new Point(Math.max(0, fallbackX), Math.max(0, fallbackY)));
+            int fx = Utils.clamp(60 * points.size(), 0, Math.max(0, width - doorSize));
+            int fy = Utils.clamp(100 + 40 * points.size(), 0, Math.max(0, height - doorSize));
+            points.add(new int[] { fx, fy });
         }
         return points;
     }
-
-    private static class Point {
-        private final int x;
-        private final int y;
-
-        private Point(int x, int y) {
-            this.x = x;
-            this.y = y;
-        }
-
-        private int distanceSquared(Point other) {
-            int dx = x - other.x;
-            int dy = y - other.y;
-            return dx * dx + dy * dy;
-        }
-    }
-
-    /** โครงสร้างผลลัพธ์การชนประตูล่าสุด */
-    public static class DoorHit {
-        private final Door door;
-
-        private DoorHit(Door door) {
-            this.door = door;
-        }
-
-        public Door getDoor() {
-            return door;
-        }
-
-        public Door.Type getType() {
-            return door.getType();
-        }
-
-        public Integer getPuzzleNumber() {
-            return door.getPuzzleNumber();
-        }
+    public record DoorHit(Door door) {
+        public Door.Type type() { return door.getType(); }
+        public int puzzleNumber() { return door.getPuzzleNumber(); }
     }
 }

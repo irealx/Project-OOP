@@ -28,7 +28,7 @@ import system.Level.DoorHit;
 import system.Lighting;
 import system.Puzzle;
 
-// REFACTOR: ทำให้ลำดับการวาดภาพเป็นระบบเดียวกัน แก้ไขง่ายและลดความซับซ้อน
+// จัดการลูปเกมหลัก การวาดภาพ และตรรกะการชนทั้งหมด
 public class GamePanel extends JPanel implements ActionListener {
 
     private final Random random = new Random();
@@ -37,23 +37,30 @@ public class GamePanel extends JPanel implements ActionListener {
     private final List<Monster> monsters = Monster.createDefaultMonsters();
     private final List<Level> levels = new ArrayList<>();
     private final Puzzle puzzle = new Puzzle();
+
     private BufferedImage background;
     private int width = Config.PANEL_WIDTH;
     private int height = Config.PANEL_HEIGHT;
+
     private int levelIndex;
     private Integer pendingReset;
-    private DoorHit activeDoor;
+    private Level.DoorHit activeDoor;
+
     public GamePanel() {
         setFocusable(true);
         setBackground(Config.BACKGROUND_COLOR);
         background = load("Pic/Background.png");
+
+        // สร้างด่านทั้งหมดตามจำนวนที่กำหนดใน Config
         for (int i = 0; i < Config.TOTAL_LEVELS; i++) {
             levels.add(new Level(Config.DOOR_PER_LEVEL, Config.DOOR_SIZE));
         }
+
         setupKeyboard();
-        resetLevel(0);
-        new Timer(Config.TIMER_DELAY_MS, this).start();
+        resetLevel(0); // เริ่มจากเลเวลแรก
+        new Timer(Config.TIMER_DELAY_MS, this).start(); // ลูปเกมหลัก
     }
+
     private BufferedImage load(String path) {
         try {
             return ImageIO.read(new File(path));
@@ -61,10 +68,13 @@ public class GamePanel extends JPanel implements ActionListener {
             return null;
         }
     }
+
+    // ตั้งค่าการควบคุมด้วยคีย์บอร์ด
     private void setupKeyboard() {
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+                // ถ้าอยู่ใน puzzle และกดปุ่มเคลื่อนที่ จะออกจากหน้าพัซเซิล
                 if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE && isMovementKey(e.getKeyCode())) {
                     closeInteraction(levels.get(levelIndex));
                 } else {
@@ -78,6 +88,8 @@ public class GamePanel extends JPanel implements ActionListener {
             }
         });
     }
+
+    // ปรับขนาดพื้นที่เกมเมื่อหน้าต่างเปลี่ยนขนาด
     public void setGameSize(int width, int height) {
         this.width = Math.max(Config.DOOR_SIZE + 100, width);
         this.height = Math.max(Config.DOOR_SIZE + 150, height);
@@ -89,34 +101,42 @@ public class GamePanel extends JPanel implements ActionListener {
     @Override
     public void addNotify() {
         super.addNotify();
-        requestFocusInWindow();
+        requestFocusInWindow(); // โฟกัสเพื่อรับ input
     }
+
+    // รีเซ็ตสถานะของเลเวลปัจจุบัน
     private void resetLevel(int index) {
         levelIndex = index;
         pendingReset = null;
         activeDoor = null;
         puzzle.clear();
+
         Level level = levels.get(levelIndex);
         level.reset(width, height);
         player.updateBounds(width, height);
         player.spawn();
 
+        // เตรียมมอนสเตอร์สำหรับเลเวลนี้
         for (Monster monster : monsters) {
             monster.prepareForLevel(levelIndex, random, width, height);
         }
     }
 
+    // ลำดับการวาด: พื้นหลัง → วัตถุ → แสง → UI
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
         List<Lighting.LightSource> lights = Lighting.collect(player, monsters);
         renderBaseSprites(g2, lights);
         renderLighting(g2, lights);
         renderOverlays(g2);
         renderUI(g2);
     }
+
+    // วาดพื้นหลัง ผู้เล่น มอนสเตอร์ และประตู (เฉพาะที่มีแสง)
     private void renderBaseSprites(Graphics2D g2, List<Lighting.LightSource> lights) {
         if (background != null) {
             g2.drawImage(background, 0, 0, width, height, null);
@@ -124,6 +144,7 @@ public class GamePanel extends JPanel implements ActionListener {
             g2.setColor(Config.BACKGROUND_COLOR);
             g2.fillRect(0, 0, width, height);
         }
+
         Level level = levels.get(levelIndex);
         for (Door door : level.getDoors()) {
             int cx = door.getX(width) + Config.DOOR_SIZE / 2;
@@ -132,62 +153,75 @@ public class GamePanel extends JPanel implements ActionListener {
                 door.draw(g2, width, height);
             }
         }
+
         player.draw(g2);
-        for (Monster monster : monsters) {
-            monster.draw(g2);
-        }
+        for (Monster monster : monsters) monster.draw(g2);
     }
+
+    // วาดเอฟเฟกต์แสงซ้อนทับ
     private void renderLighting(Graphics2D g2, List<Lighting.LightSource> lights) {
         g2.drawImage(Lighting.createMask(width, height, lights), 0, 0, null);
     }
+
+    // แสดง overlay ของ Puzzle เมื่อชนประตูพัซเซิล
     private void renderOverlays(Graphics2D g2) {
         if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE) {
             puzzle.draw(g2, width, height);
         }
     }
+
+    // วาด UI ด้านบน เช่น ชื่อเลเวล
     private void renderUI(Graphics2D g2) {
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 20));
         g2.drawString("Level " + (levelIndex + 1), 20, 30);
     }
 
+    // ลูปหลักของเกม เรียกทุกครั้งเมื่อ Timer ทำงาน
     @Override
     public void actionPerformed(ActionEvent e) {
         Level level = levels.get(levelIndex);
         level.getDoors().forEach(Door::updateAnimation);
-        if (activeDoor == null || player.isDead()) {
-            player.update();
-        }
+
+        // อัปเดตผู้เล่น
+        if (activeDoor == null || player.isDead()) player.update();
+
+        // จัดการสถานะหลังตาย / รีเซ็ตเลเวล
         if (pendingReset != null && player.isDeathAnimationFinished()) {
             resetLevel(pendingReset);
             repaint();
             return;
         }
-        if (player.isDead()) {
+
+        if (player.isDead() || activeDoor != null) {
             repaint();
             return;
         }
-        if (activeDoor != null) {
-            repaint();
-            return;
-        }
+
+        // อัปเดตมอนสเตอร์และตรวจการชน
         Monster.updateAll(monsters, player, level);
         handleCollisions(level);
         repaint();
     }
+
+    // ตรวจการชนของผู้เล่นกับประตูและมอนสเตอร์
     private void handleCollisions(Level level) {
         DoorHit hit = level.detectDoorCollision(player);
         if (hit != null) {
-             activeDoor = hit;
+            activeDoor = hit;
             player.stopImmediately();
+
             if (hit.type() == Door.Type.PUZZLE) {
                 puzzle.show(hit.puzzleNumber());
                 return;
             }
+
             puzzle.clear();
             promptPassword(level, hit);
             return;
         }
+
+        // ชนมอนสเตอร์ -> ตายและรีเซ็ต
         for (Monster monster : monsters) {
             if (monster.isActive() && player.intersects(monster)) {
                 player.die();
@@ -196,21 +230,35 @@ public class GamePanel extends JPanel implements ActionListener {
             }
         }
     }
+
+    // กล่องใส่รหัสผ่านเมื่อชนประตูไปต่อ/ย้อนกลับ
     private void promptPassword(Level level, DoorHit hit) {
-        String input = JOptionPane.showInputDialog(this, "Please enter password", "รหัสประตู", JOptionPane.QUESTION_MESSAGE);
+        String input = JOptionPane.showInputDialog(
+                this, "Please enter password", "รหัสประตู", JOptionPane.QUESTION_MESSAGE
+        );
+
         if (level.validatePassword(input)) {
             int next = hit.type() == Door.Type.ADVANCE
                     ? (levelIndex + 1) % Config.TOTAL_LEVELS
                     : (levelIndex - 1 + Config.TOTAL_LEVELS) % Config.TOTAL_LEVELS;
+
             resetLevel(next);
             requestFocusInWindow();
             return;
         }
+
         if (input != null) {
-            JOptionPane.showMessageDialog(this, "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ", "รหัสผิดพลาด", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
+                    "รหัสผิดพลาด",
+                    JOptionPane.WARNING_MESSAGE
+            );
         }
         closeInteraction(level);
     }
+
+    // ปิดหน้าพัซเซิล / กลับเข้าสู่การควบคุมปกติ
     private void closeInteraction(Level level) {
         if (activeDoor != null) {
             level.pushAway(player, activeDoor.door());
@@ -219,6 +267,8 @@ public class GamePanel extends JPanel implements ActionListener {
         puzzle.clear();
         requestFocusInWindow();
     }
+
+    // ตรวจว่าปุ่มที่กดเป็นปุ่มเคลื่อนที่หรือไม่
     private boolean isMovementKey(int code) {
         return switch (code) {
             case KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_UP, KeyEvent.VK_DOWN,

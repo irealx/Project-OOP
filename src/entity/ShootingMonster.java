@@ -1,3 +1,4 @@
+package entity;
 // มอนสเตอร์ที่สามารถ "พุ่งเร็ว" ได้เป็นช่วง ๆ
 public class ShootingMonster extends Monster {
     private final int baseSpeed;       // ความเร็วพื้นฐาน

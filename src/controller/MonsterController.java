@@ -1,4 +1,8 @@
+package controller;
 import java.util.Random;
+
+import entity.Monster;
+import entity.StunMonster;
 /**
  * คลาสควบคุมการทำงานของมอนสเตอร์แต่ละตัว
   * ทำหน้าที่เปิด/ปิดการทำงานตามด่านและสั่งให้มอนสเตอร์สุ่มจุดเกิด

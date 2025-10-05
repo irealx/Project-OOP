@@ -22,6 +22,17 @@ import java.util.List;             // interface ของ ArrayList
 import java.util.Random;           // ใช้สุ่มตำแหน่งและค่าอื่น ๆ
 import javax.swing.JPanel;         // พื้นที่หลักของเกม (Canvas)
 import javax.swing.Timer;          // ตัวจับเวลาในการอัปเดตเกมทุกเฟรม
+
+import controller.MonsterController;
+import entity.Monster;
+import entity.Player;
+import entity.ShootingMonster;
+import entity.StunMonster;
+import entity.WrapMonster;
+import system.Door;
+import system.Level;
+import system.Puzzle;
+
 import javax.imageio.ImageIO;      // โหลดไฟล์ภาพจากดิสก์
 import javax.swing.JOptionPane;    // กล่องโต้ตอบสำหรับใส่รหัสผ่านประตู
 

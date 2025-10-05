@@ -1,3 +1,4 @@
+package entity;
 // มอนสเตอร์ที่วาร์ปทะลุขอบจอได้
 public class WrapMonster extends Monster {
     private final int speed; // ความเร็วคงที่ของมอนสเตอร์

@@ -1,3 +1,4 @@
+package entity;
 import java.util.Random;
 
 // คลาส abstract พื้นฐานของมอนสเตอร์ทุกประเภท

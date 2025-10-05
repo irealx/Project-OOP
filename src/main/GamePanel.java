@@ -193,6 +193,7 @@ public class GamePanel extends JPanel implements ActionListener {
                 player.die();
                 pendingReset = 0;
                 break;
+            }
         }
     }
     private void promptPassword(Level level, DoorHit hit) {

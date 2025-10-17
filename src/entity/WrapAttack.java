@@ -9,49 +9,42 @@ import system.Level;
 import system.Utils;
 
 /**
- * WrapAttack — พฤติกรรม "วาร์ป" ของมอนสเตอร์ใน Six Door Maze (ภาษาไทย)
- * คอยจับจังหวะเพื่อวาร์ปหายไปแล้วโผล่ด้านหลังผู้เล่น พร้อมใช้แอนิเมชัน death.png
+ * WrapAttack — พฤติกรรม "วาร์ป" ของมอนสเตอร์ใน Six Door Maze
+ * ใช้ death.png (10 เฟรม) เพื่อทำแอนิเมชันวาร์ป → รอ → โผล่หลังผู้เล่น
  */
 public class WrapAttack implements Monster.AttackBehavior {
 
-    // ===== ค่าคงที่หลัก =====
-    private static final long WARP_COOLDOWN_MS = 5000L;          // 5 วิพักก่อนวาร์ปรอบใหม่
-    private static final int FRAME_DELAY = 8;                     // ให้เฟรมตรงกับระบบ Monster
-    private static final int WARP_RANGE = 320;                    // ระยะตรวจจับก่อนเริ่มวาร์ป
-    private static final int SAFE_OFFSET = 12;                    // ระยะห่างจากผู้เล่นตอนโผล่
-    private static final int WARP_FRAMES = Math.max(1,
-            Monster.gMonsterAnimator().get("death").length);     // จำนวนเฟรม death.png
-    private static final int WARP_WAIT_TICKS = FRAME_DELAY * 10;  // หน่วงเวลา 10 เฟรมก่อนโผล่กลับ
+    // ===== 🧩 ค่าคงที่ =====
+    private static final long WARP_COOLDOWN_MS = 5000L;     // เวลาพักระหว่างวาร์ปรอบใหม่
+    private static final int FRAME_DELAY = 8;                // ความหน่วงเฟรมตรงกับระบบ Monster
+    private static final int WARP_RANGE = 320;               // ระยะเริ่มวาร์ป
+    private static final int SAFE_OFFSET = 12;               // ระยะห่างจากผู้เล่นตอนโผล่
+    private static final int WARP_FRAMES =
+            Math.max(1, Monster.gMonsterAnimator().get("death").length / 2); // จำนวนเฟรม death.png
+    private static final int WARP_WAIT_TICKS = FRAME_DELAY * 10; // รอ 10 เฟรมก่อนโผล่กลับ
 
-    // ===== สถานะของการวาร์ป =====
+    // ===== 🧭 สถานะการวาร์ป =====
     private enum State { IDLE, WARP_START, WARP_WAIT, WARP_END }
 
+    // เก็บสถานะแยกสำหรับมอนแต่ละตัว (ใช้ WeakHashMap เพื่อ auto clear)
     private static class Data {
         State state = State.IDLE;
-        int frameIndex;
-        int frameTimer;
-        boolean animationFinished;
+        int frameIndex, frameTimer, waitTimer;
+        boolean animationFinished, hasTarget;
         long lastWarpTime = System.currentTimeMillis();
-        double dirX;
-        double dirY;
+        double dirX, dirY;
         String currentAnim = "";
-        int waitTimer;
-        int targetX;
-        int targetY;
-        int targetCenterX;
-        int targetCenterY;
-        boolean hasTarget;
+        int targetX, targetY, targetCenterX, targetCenterY;
     }
 
     private final WeakHashMap<Monster, Data> states = new WeakHashMap<>();
 
+    // ===== 🎯 Logic หลัก =====
     @Override
     public void attack(Monster self, Player player, Level level) {
         Data data = state(self);
         if (player == null) {
-            // 🔹 ถ้าไม่มีผู้เล่นให้หยุดนิ่งและรอ
-            switchAnimation(self, data, "idle");
-            data.state = State.IDLE;
+            idle(self, data);
             return;
         }
 
@@ -65,16 +58,18 @@ public class WrapAttack implements Monster.AttackBehavior {
 
     @Override
     public void afterUpdate(Monster self) {
-        // 🔹 ป้องกันตำแหน่งหลังวาร์ปให้อยู่ในกรอบจอ
+        // 🔹 ป้องกันไม่ให้มอนออกนอกขอบจอหลังวาร์ป
         self.clamp();
     }
 
+    // ===== 🎨 เอฟเฟกต์วงก่อนวาร์ป =====
     @Override
     public void render(Graphics2D g, Monster self) {
         Data data = states.get(self);
         if (data == null || !data.hasTarget || data.state != State.WARP_START) return;
 
-        float frameProgress = (data.frameIndex + data.frameTimer / (float) FRAME_DELAY) / Math.max(1f, WARP_FRAMES);
+        float frameProgress = (data.frameIndex + data.frameTimer / (float) FRAME_DELAY) /
+                Math.max(1f, WARP_FRAMES);
         frameProgress = Utils.clamp(frameProgress, 0f, 1f);
 
         int baseRadius = Math.max(self.getSize(), self.getSize() + SAFE_OFFSET * 2);
@@ -86,6 +81,7 @@ public class WrapAttack implements Monster.AttackBehavior {
         EffectRenderer.setAlpha(g, 0.65f);
         g.setColor(new Color(120, 255, 200));
         g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
         int diameter = radius * 2;
         g.drawOval(data.targetCenterX - radius, data.targetCenterY - radius, diameter, diameter);
 
@@ -100,91 +96,94 @@ public class WrapAttack implements Monster.AttackBehavior {
         data.frameIndex = data.frameTimer = 0;
         data.animationFinished = false;
         data.lastWarpTime = System.currentTimeMillis();
-        switchAnimation(self, data, "idle");
         data.waitTimer = 0;
         data.hasTarget = false;
+        switchAnimation(self, data, "idle");
     }
 
-    // ===== จัดการสถานะ IDLE =====
+    // ===== 💤 สถานะ Idle =====
     private void handleIdle(Monster self, Player player, Data data) {
         switchAnimation(self, data, "idle");
+        self.follow(player.getX(), player.getY()); // เดินตามผู้เล่นปกติ
 
-        // 🔹 ให้มอนสเตอร์เดินตามผู้เล่นแบบปกติ
-        self.follow(player.getX(), player.getY());
-
-        // 🔹 ตรวจคูลดาวน์และระยะ ถ้าพร้อมให้เริ่มวาร์ป
         long now = System.currentTimeMillis();
-        if (now - data.lastWarpTime < WARP_COOLDOWN_MS) return;
+        if (now - data.lastWarpTime < WARP_COOLDOWN_MS) return; // ยังไม่ถึงคูลดาวน์
 
         int dx = player.getCenterX() - self.getCenterX();
         int dy = player.getCenterY() - self.getCenterY();
-        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return;
+        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return; // ผู้เล่นอยู่ไกลเกิน
 
+        // 🔹 เริ่มเตรียมวาร์ป
         data.dirX = dx;
         data.dirY = dy;
         enterState(self, data, State.WARP_START, "death");
     }
 
-    // ===== เริ่มเล่น death.png แบบเดินหน้า =====
+    // ===== 🌀 เริ่มวาร์ป (death.png เดินหน้า) =====
     private void handleWarpStart(Monster self, Player player, Data data) {
-        self.setVelocity(0, 0); // 🔸 ล็อกตำแหน่งระหว่างวาร์ป
+        self.setVelocity(0, 0); // 🔸 ล็อกมอนให้นิ่ง
 
-        if (!data.hasTarget && player != null) {
+        if (!data.hasTarget && player != null)
             prepareWarpTarget(self, player, data);
-        }
 
+        // 🔹 เล่นเฟรมครึ่งแรก (0–9)
         if (advanceAnimation(data, WARP_FRAMES)) {
-            // 🔹 เมื่อแอนิเมชันจบ → ย้ายไปด้านหลังผู้เล่น
             teleportBehind(self, player, data);
 
+            // ✅ เมื่อจบครึ่งแรก ให้เตรียมเข้าสถานะรอ
             data.state = State.WARP_WAIT;
             data.waitTimer = WARP_WAIT_TICKS;
             data.animationFinished = false;
-            data.frameIndex = 0;
+
+            // 🔹 เริ่ม reverse ที่เฟรมครึ่งหลัง (10)
+            data.frameIndex = WARP_FRAMES; 
             data.frameTimer = 0;
             data.hasTarget = false;
         }
     }
-
-    // ===== หน่วงเวลาเล็กน้อยก่อนเล่น death แบบย้อนกลับ =====
+    // ===== ⏳ รอคูลดาวน์ก่อนย้อนเฟรม =====
     private void handleWarpWait(Monster self, Data data) {
         self.setVelocity(0, 0);
-
-        if (data.waitTimer > 0) {
-            data.waitTimer--;
-            return;
-        }
-
+        if (data.waitTimer-- > 0) return;
         enterState(self, data, State.WARP_END, "death_reverse");
     }
 
-    // ===== เล่น death.png แบบย้อนกลับ =====
+    // ===== 🔁 เล่น death.png แบบย้อนกลับ =====
     private void handleWarpEnd(Monster self, Data data) {
         self.setVelocity(0, 0);
-
         if (advanceAnimation(data, WARP_FRAMES)) {
             data.lastWarpTime = System.currentTimeMillis();
             enterState(self, data, State.IDLE, "idle");
         }
     }
 
-    // ===== ฟังก์ชันช่วยเหลือ =====
+    // ===== 🧠 ฟังก์ชันช่วยจัดการสถานะ =====
+    private void idle(Monster self, Data data) {
+        switchAnimation(self, data, "idle");
+        data.state = State.IDLE;
+    }
+
     private Data state(Monster self) {
         return states.computeIfAbsent(self, s -> new Data());
     }
 
-    private void enterState(Monster self, Data data, State next, String animation) {
+    private void enterState(Monster self, Data data, State next, String anim) {
         data.state = next;
+        resetAnim(data);
+        switchAnimation(self, data, anim);
+    }
+
+    private void resetAnim(Data data) {
         data.frameIndex = 0;
         data.frameTimer = 0;
         data.animationFinished = false;
-        switchAnimation(self, data, animation);
+        data.hasTarget = false;
     }
 
-    private void switchAnimation(Monster self, Data data, String animation) {
-        if (!animation.equals(data.currentAnim)) {
-            self.setAnimation(animation);
-            data.currentAnim = animation;
+    private void switchAnimation(Monster self, Data data, String anim) {
+        if (!anim.equals(data.currentAnim)) {
+            self.setAnimation(anim);
+            data.currentAnim = anim;
         }
     }
 
@@ -193,71 +192,47 @@ public class WrapAttack implements Monster.AttackBehavior {
 
         if (++data.frameTimer >= FRAME_DELAY) {
             data.frameTimer = 0;
-            data.frameIndex++;
-            if (data.frameIndex >= totalFrames) {
-                data.frameIndex = totalFrames - 1;
-                data.animationFinished = true;
+
+            // 🔹 ถ้าเป็นแอนิเมชันย้อนกลับ
+            if ("death_reverse".equals(data.currentAnim)) {
+                data.frameIndex--;
+                if (data.frameIndex <= 0) {
+                    data.frameIndex = 0;
+                    data.animationFinished = true;
+                }
+            } else {
+                // 🔹 เล่นไปข้างหน้า (เช่น death)
+                data.frameIndex++;
+                if (data.frameIndex >= totalFrames) {
+                    data.frameIndex = totalFrames - 1;
+                    data.animationFinished = true;
+                }
             }
         }
         return data.animationFinished;
     }
 
-    private void teleportBehind(Monster self, Player player, Data data) {
-        double vx = data.dirX;
-        double vy = data.dirY;
-        double length = Math.hypot(vx, vy);
-
-        if (length < 1e-3) {
-            // 🔸 ถ้าอยู่ตำแหน่งเดียวกัน ให้สุ่มทิศหนีเล็กน้อย
-            vx = 1;
-            vy = 0;
-            length = 1;
-        }
-
-        double nx = vx / length;
-        double ny = vy / length;
-
-        int distance = player.getSize() + self.getSize() + SAFE_OFFSET;
-        int centerX = player.getCenterX() - (int) Math.round(nx * distance);
-        int centerY = player.getCenterY() - (int) Math.round(ny * distance);
-
-        int newX = centerX - self.getSize() / 2;
-        int newY = centerY - self.getSize() / 2;
-
-        newX = Utils.clamp(newX, 0, self.panelWidth - self.getSize());
-        newY = Utils.clamp(newY, 0, self.panelHeight - self.getSize());
-
-        self.setPosition(newX, newY);
-    }
-
+    // ===== 📍 คำนวณตำแหน่งวาร์ป =====
     private void prepareWarpTarget(Monster self, Player player, Data data) {
-        double vx = data.dirX;
-        double vy = data.dirY;
-        double length = Math.hypot(vx, vy);
+        double vx = data.dirX, vy = data.dirY;
+        double len = Math.hypot(vx, vy);
+        if (len < 1e-3) { vx = 1; vy = 0; len = 1; }
 
-        if (length < 1e-3) {
-            vx = 1;
-            vy = 0;
-            length = 1;
-        }
+        double nx = vx / len, ny = vy / len;
+        int dist = player.getSize() + self.getSize() + SAFE_OFFSET;
 
-        double nx = vx / length;
-        double ny = vy / length;
-
-        int distance = player.getSize() + self.getSize() + SAFE_OFFSET;
-        int centerX = player.getCenterX() - (int) Math.round(nx * distance);
-        int centerY = player.getCenterY() - (int) Math.round(ny * distance);
-
-        int newX = centerX - self.getSize() / 2;
-        int newY = centerY - self.getSize() / 2;
-
-        newX = Utils.clamp(newX, 0, self.panelWidth - self.getSize());
-        newY = Utils.clamp(newY, 0, self.panelHeight - self.getSize());
+        int newX = Utils.clamp(player.getCenterX() - (int) (nx * dist) - self.getSize() / 2, 0, self.panelWidth - self.getSize());
+        int newY = Utils.clamp(player.getCenterY() - (int) (ny * dist) - self.getSize() / 2, 0, self.panelHeight - self.getSize());
 
         data.targetX = newX;
         data.targetY = newY;
         data.targetCenterX = newX + self.getSize() / 2;
         data.targetCenterY = newY + self.getSize() / 2;
         data.hasTarget = true;
+    }
+
+    private void teleportBehind(Monster self, Player player, Data data) {
+        prepareWarpTarget(self, player, data);
+        self.setPosition(data.targetX, data.targetY);
     }
 }

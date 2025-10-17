@@ -22,7 +22,7 @@ public class MonsterAnimator {
     public MonsterAnimator() {
         // โหลด sprite ทั้งหมดที่ใช้ในเกม (เพิ่มหรือแก้ path ได้ง่ายในอนาคต)
         load("idle",        "Pic/character/Mon/idle.png",        4);
-        load("death",       "Pic/character/Mon/death.png",      10);
+        load("death",       "Pic/character/Mon/death.png",      20);
         load("skill1",      "Pic/character/Mon/skill1.png",     10);
         load("summon",      "Pic/character/Mon/summon.png",     10);
         load("summonIdle",  "Pic/character/Mon/summonIdle.png",  4);

@@ -28,6 +28,7 @@ public final class Config {
     public static final int[] MONSTER_LIGHT = { 120, 120, 140 }; // รัศมีแสงรอบมอนแต่ละประเภท
     public static final int MONSTER_SIZE = 32;                // ขนาดของมอนสเตอร์
     public static final int FRAME_DELAY_MONSTER = 3;          // ความหน่วงระหว่างแต่ละเฟรมอนิเมชันมอน
+    public static final int MONSTER_INITIAL_DELAY_MS = 500;   // ดีเลย์ก่อนเริ่มโจมตีครั้งแรกเมื่อเริ่มด่าน
 
 
     // การตั้งค่าด่าน / ระบบประตู

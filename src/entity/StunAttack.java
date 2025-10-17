@@ -31,7 +31,7 @@ class StunAttack extends BaseAttack<StunAttack.State> {
         State data = state(self);
         data.stunTick = 0;
         data.casting = false;
-        markCooldownWithDelay(data, COOLDOWN_MS, 2000);
+        markCooldownWithDelay(data, COOLDOWN_MS, Config.MONSTER_INITIAL_DELAY_MS);
         switchAnimation(self, data, "idle");
     }
 

@@ -59,7 +59,7 @@ public class ShootAttack extends BaseAttack<ShootAttack.State> {
         State data = state(self);
         stopCasting(self, data);
         data.projectiles.clear();
-        markCooldownWithDelay(data, COOLDOWN_MS, 2000);
+        markCooldownWithDelay(data, COOLDOWN_MS, MONSTER_INITIAL_DELAY_MS);
         switchAnimation(self, data, "idle");
     }
 

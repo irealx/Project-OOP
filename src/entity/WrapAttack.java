@@ -53,7 +53,7 @@ public class WrapAttack extends BaseAttack<WrapAttack.State> {
     public void reset(Monster self) {
         State data = state(self);
         goIdle(self, data);
-        markCooldownWithDelay(data, WARP_COOLDOWN_MS, 2000);
+        markCooldownWithDelay(data, WARP_COOLDOWN_MS, MONSTER_INITIAL_DELAY_MS);
     }
 
     // ===== 💤 สถานะ Idle =====

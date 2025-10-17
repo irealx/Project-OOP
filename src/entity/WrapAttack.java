@@ -16,7 +16,7 @@ public class WrapAttack implements Monster.AttackBehavior {
 
     // ===== 🧩 ค่าคงที่ =====
     private static final long WARP_COOLDOWN_MS = 5000L;     // เวลาพักระหว่างวาร์ปรอบใหม่
-    private static final int FRAME_DELAY = 8;                // ความหน่วงเฟรมตรงกับระบบ Monster
+    private static final int FRAME_DELAY = 3;                // ความหน่วงเฟรมตรงกับระบบ Monster
     private static final int WARP_RANGE = 320;               // ระยะเริ่มวาร์ป
     private static final int SAFE_OFFSET = 12;               // ระยะห่างจากผู้เล่นตอนโผล่
     private static final int WARP_FRAMES =
@@ -31,6 +31,7 @@ public class WrapAttack implements Monster.AttackBehavior {
         boolean animationFinished, hasTarget;
         long lastWarpTime = System.currentTimeMillis();
         String currentAnim = "";
+        int frameIndex, frameTimer;
         int targetX, targetY, targetCenterX, targetCenterY;
     }
 
@@ -93,11 +94,13 @@ public class WrapAttack implements Monster.AttackBehavior {
         data.animationFinished = false;
         data.lastWarpTime = System.currentTimeMillis();
         data.hasTarget = false;
+        self.unlockAnimation();
         switchAnimation(self, data, "idle");
     }
 
     // ===== 💤 สถานะ Idle =====
     private void handleIdle(Monster self, Player player, Data data) {
+        self.unlockAnimation();
         switchAnimation(self, data, "idle");
         self.follow(player.getX(), player.getY()); // เดินตามผู้เล่นปกติ
 
@@ -110,26 +113,26 @@ public class WrapAttack implements Monster.AttackBehavior {
 
         // 🔹 เริ่มเตรียมวาร์ป
         enterState(self, data, State.WARP_CHARGE, "death");
+        if (player != null) {
+            lockWarpTarget(self, player, data);
+        }
     }
 
     // ===== 🌀 เริ่มวาร์ป (death.png เดินหน้า) =====
     private void handleWarpCharge(Monster self, Player player, Data data) {
         self.setVelocity(0, 0); // 🔸 ล็อกมอนให้นิ่ง
 
-        if (player != null)
-            prepareWarpTarget(self, player, data);
+        if (!data.hasTarget && player != null) {
+            lockWarpTarget(self, player, data);
+        }
 
         // 🔹 เล่น death.png ครบ 20 เฟรมก่อนจะวาร์ป
-        if (advanceAnimation(data, WARP_FRAMES)) {
+        if (advanceAnimation(self, data, WARP_FRAMES)) {
             teleportBehind(self, player, data);
             data.hasTarget = false;
             
             // ✅ เมื่อจบให้เล่น death_reverse ย้อนกลับ 20 เฟรม
             enterState(self, data, State.WARP_RECOVER, "death_reverse");
-            int reverseFrames = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
-            data.frameIndex = reverseFrames - 1;
-            data.frameTimer = 0;
-            data.hasTarget = false;
         }
     }
 
@@ -137,7 +140,7 @@ public class WrapAttack implements Monster.AttackBehavior {
     private void handleWarpRecover(Monster self, Data data) {
         self.setVelocity(0, 0);
         int reverseFrames = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
-        if (advanceAnimation(data, reverseFrames)) {
+        if (advanceAnimation(self, data, reverseFrames)) {
             data.lastWarpTime = System.currentTimeMillis();
             enterState(self, data, State.IDLE, "idle");
         }
@@ -145,6 +148,7 @@ public class WrapAttack implements Monster.AttackBehavior {
 
     // ===== 🧠 ฟังก์ชันช่วยจัดการสถานะ =====
     private void idle(Monster self, Data data) {
+        self.unlockAnimation();
         switchAnimation(self, data, "idle");
         data.state = State.IDLE;
     }
@@ -157,6 +161,12 @@ public class WrapAttack implements Monster.AttackBehavior {
         data.state = next;
         resetAnim(data);
         switchAnimation(self, data, anim);
+        if (next == State.IDLE) {
+            self.unlockAnimation();
+        } else {
+            self.lockAnimation();
+            self.setAnimationFrame(data.frameIndex);
+        }
     }
 
     private void resetAnim(Data data) {
@@ -173,33 +183,27 @@ public class WrapAttack implements Monster.AttackBehavior {
         }
     }
 
-    private boolean advanceAnimation(Data data, int totalFrames) {
-        if (data.animationFinished) return true;
+    private boolean advanceAnimation(Monster self, Data data, int totalFrames) {
+        if (data.animationFinished || totalFrames <= 0) {
+            return true;
+        }
 
         if (++data.frameTimer >= FRAME_DELAY) {
             data.frameTimer = 0;
 
-            // 🔹 ถ้าเป็นแอนิเมชันย้อนกลับ
-            if ("death_reverse".equals(data.currentAnim)) {
-                data.frameIndex--;
-                if (data.frameIndex <= 0) {
-                    data.frameIndex = 0;
-                    data.animationFinished = true;
-                }
-            } else {
-                // 🔹 เล่นไปข้างหน้า (เช่น death)
-                data.frameIndex++;
-                if (data.frameIndex >= totalFrames) {
-                    data.frameIndex = totalFrames - 1;
-                    data.animationFinished = true;
-                }
+            data.frameIndex++;
+            if (data.frameIndex >= totalFrames) {
+                data.frameIndex = totalFrames - 1;
+                data.animationFinished = true;
             }
+            self.setAnimationFrame(data.frameIndex);
         }
+
         return data.animationFinished;
     }
 
     // ===== 📍 คำนวณตำแหน่งวาร์ป =====
-    private void prepareWarpTarget(Monster self, Player player, Data data) {
+    private void lockWarpTarget(Monster self, Player player, Data data) {
         int dx = player.getCenterX() - self.getCenterX();
         int dy = player.getCenterY() - self.getCenterY();
         double len = Math.hypot(dx, dy);
@@ -220,7 +224,9 @@ public class WrapAttack implements Monster.AttackBehavior {
     }
 
     private void teleportBehind(Monster self, Player player, Data data) {
-        prepareWarpTarget(self, player, data);
+        if (!data.hasTarget && player != null) {
+            lockWarpTarget(self, player, data);
+        }
         self.setPosition(data.targetX, data.targetY);
     }
 }

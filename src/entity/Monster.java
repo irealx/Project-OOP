@@ -49,6 +49,7 @@ public class Monster extends Sprite {
     private int frameTimer = 0;             // ตัวนับเวลาเปลี่ยนเฟรม
     private boolean moving = false;         // กำลังเคลื่อนไหวอยู่ไหม
     private boolean facingLeft = false;     // จำว่ามอนหันซ้ายไหม
+    private boolean animationLocked = false;// ล็อกไม่ให้อนิเมชันเดินเอง (ใช้กับท่าเฉพาะ)
 
     // ----------------------------------------------------
 
@@ -112,6 +113,8 @@ public class Monster extends Sprite {
 
     // อัปเดตอนิเมชัน (เปลี่ยนเฟรมทุก 8 ticks)
     private void updateAnimation() {
+        if (animationLocked) return; // 🔒 ถูก behavior ล็อกไว้ ให้รอจนปลดล็อก
+
         BufferedImage[] frames = animator.get(currentAnim);
         if (frames.length == 0) return;
 
@@ -160,6 +163,28 @@ public class Monster extends Sprite {
         this.currentAnim = name;
         this.frameIndex = this.frameTimer = 0;
     }
+
+    // ===== 🎞 ควบคุมเฟรมแบบแมนนวลสำหรับท่าพิเศษ =====
+    public void lockAnimation() {
+        if (!animationLocked) {
+            animationLocked = true;
+            frameTimer = 0;
+        }
+    }
+
+    public void unlockAnimation() {
+        if (animationLocked) {
+            animationLocked = false;
+            frameTimer = 0;
+        }
+    }
+
+    public void setAnimationFrame(int index) {
+        BufferedImage[] frames = animator.get(currentAnim);
+        if (frames.length == 0) return;
+        frameIndex = Utils.clamp(index, 0, frames.length - 1);
+    }
+
 
     public boolean isActive() { return active; }
     public AttackType getAttackType() { return type; }

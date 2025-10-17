@@ -36,11 +36,20 @@ public class MonsterAnimator {
     private void load(String name, String path, int frames) {
         try {
             BufferedImage sheet = ImageIO.read(new File(path));
-            int frameCount = Math.min(frames, sheet.getWidth() / FRAME_WIDTH);
+            int cols = Math.max(1, sheet.getWidth() / FRAME_WIDTH);
+            int rows = Math.max(1, sheet.getHeight() / FRAME_HEIGHT);
+            int available = cols * rows;
+            int frameCount = Math.min(frames, available);
             BufferedImage[] arr = new BufferedImage[frameCount];
 
             for (int i = 0; i < frameCount; i++) {
-                arr[i] = sheet.getSubimage(i * FRAME_WIDTH, 0, FRAME_WIDTH, FRAME_HEIGHT);
+                int col = i % cols;
+                int row = i / cols;
+                if (row >= rows) break; // ป้องกัน index เกินภาพจริง
+
+                int x = col * FRAME_WIDTH;
+                int y = row * FRAME_HEIGHT;
+                arr[i] = sheet.getSubimage(x, y, FRAME_WIDTH, FRAME_HEIGHT);
             }
 
             animations.put(name, arr);

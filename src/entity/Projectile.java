@@ -15,9 +15,12 @@ public class Projectile {
     private static final int FRAME_DELAY = 5;
     private static final BufferedImage[] FRAMES =
             Monster.gMonsterAnimator().get("summonIdle");
+    static {
+        System.out.println("Loaded FRAMES: " + (FRAMES == null ? "null" : FRAMES.length));
+    }
     private static final int BASE_FRAME_SIZE =
             (FRAMES.length > 0 ? FRAMES[0].getWidth() : 100);
-    private static final double DRAW_SCALE = 0.6; // ย่อให้กระสุนไม่ใหญ่จนเกินไป
+    private static final double DRAW_SCALE = 0.25; // ลดขนาดกระสุนลง
     private static final int DRAW_SIZE = (int) Math.round(BASE_FRAME_SIZE * DRAW_SCALE);
 
     private double x;

@@ -211,6 +211,10 @@ public class GamePanel extends JPanel implements ActionListener {
         if (activeDoor == null || player.isDead()) player.update();
 
         // จัดการสถานะหลังตาย / รีเซ็ตเลเวล
+        if (player.isDead() && pendingReset == null) {
+            pendingReset = 0;
+        }
+
         if (pendingReset != null && player.isDeathAnimationFinished()) {
             resetLevel(pendingReset);
             repaint();

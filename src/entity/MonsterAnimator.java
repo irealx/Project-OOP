@@ -21,11 +21,11 @@ public class MonsterAnimator {
 
     public MonsterAnimator() {
         // โหลด sprite ทั้งหมดที่ใช้ในเกม (เพิ่มหรือแก้ path ได้ง่ายในอนาคต)
-        load("idle",        "Pic/character/Mon/idle.png",        4);
-        load("death",       "Pic/character/Mon/death.png",      20);
-        load("skill1",      "Pic/character/Mon/skill1.png",     10);
-        load("summon",      "Pic/character/Mon/summon.png",     10);
-        load("summonIdle",  "Pic/character/Mon/summonIdle.png",  4);
+        load("idle",        "Pic/character/Mon/idle.png",4);
+        load("death",       "Pic/character/Mon/death.png",20);
+        load("skill1",      "Pic/character/Mon/skill1.png",10);
+        load("summon",      "Pic/character/Mon/summon.png",10);
+        load("summonIdle", "Pic/character/Mon/summonIdle.png", 1);
 
         mirrorFrom("death_reverse", "death");
     }
@@ -49,7 +49,9 @@ public class MonsterAnimator {
 
                 int x = col * FRAME_WIDTH;
                 int y = row * FRAME_HEIGHT;
-                arr[i] = sheet.getSubimage(x, y, FRAME_WIDTH, FRAME_HEIGHT);
+                int w = Math.min(FRAME_WIDTH, sheet.getWidth() - x);
+                int h = Math.min(FRAME_HEIGHT, sheet.getHeight() - y);
+                arr[i] = sheet.getSubimage(x, y, w, h);
             }
 
             animations.put(name, arr);

@@ -4,32 +4,18 @@ import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.WeakHashMap;
 import system.Level;
-import static system.Config.*;
 
-/**
- * ShootAttack — มอนสเตอร์สายยิงพลังงาน
- * ใช้แอนิเมชัน summon.png ก่อนปล่อยกระสุน 3 ทิศทางพร้อมกัน
- */
-public class ShootAttack implements Monster.AttackBehavior {
-
-    // ===== ค่าคงที่หลัก =====
-    private static final int SUMMON_FRAMES = Math.max(1,
-            Monster.gMonsterAnimator().get("summon").length);
-
-    private static class Data {
+// ShootAttack — มอนสเตอร์ยิงพลังงานกระจายสามทิศพร้อมเอฟเฟกต์กระสุน
+public class ShootAttack extends BaseAttack<ShootAttack.State> {
+    private static final int SUMMON_FRAMES = Math.max(1, Monster.gMonsterAnimator().get("summon").length);
+    private static final long COOLDOWN_MS = SHOOT_COOLDOWN_TICKS * TIMER_DELAY_MS;
+    
+    static class State extends BaseAttack.State{
         boolean attacking;
         boolean fired;
-        int frameIndex;
-        int frameTimer;
-        boolean animationFinished;
-        long lastShotTime = System.currentTimeMillis();
         final List<Projectile> projectiles = new ArrayList<>();
-        String currentAnim = "";
     }
-
-    private final WeakHashMap<Monster, Data> states = new WeakHashMap<>();
 
     @Override
     public void attack(Monster self, Player player, Level level) {

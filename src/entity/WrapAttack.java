@@ -1,232 +1,210 @@
 package entity;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
 import java.util.WeakHashMap;
-import system.EffectRenderer;
 import system.Level;
 import system.Utils;
 
+import static system.Config.*;
+
 /**
- * WrapAttack — พฤติกรรม "วาร์ป" ของมอนสเตอร์ใน Six Door Maze
- * ใช้ death.png (20 เฟรม) เพื่อทำแอนิเมชันวาร์ป → ย้อนแอนิเมชันกลับและออกไล่ผู้เล่นต่อ
+ * ===== 🧩 WrapAttack — มอนสเตอร์วาร์ปครบ 20 เฟรมพร้อมหน่วงพัก =====
+ * 
+ * ทำงานโดย:
+ * 1. ตรวจจับผู้เล่นในระยะ WARP_RANGE
+ * 2. เล่น death.png 20 เฟรม (หายตัว)
+ * 3. รอ 10 เฟรม (นิ่ง)
+ * 4. เล่น death_reverse 20 เฟรม (โผล่กลับ)
+ * 5. เดินตามผู้เล่นต่อ
  */
 public class WrapAttack implements Monster.AttackBehavior {
 
-    // ===== 🧩 ค่าคงที่ =====
-    private static final long WARP_COOLDOWN_MS = 5000L;     // เวลาพักระหว่างวาร์ปรอบใหม่
-    private static final int FRAME_DELAY = 3;                // ความหน่วงเฟรมตรงกับระบบ Monster
-    private static final int WARP_RANGE = 320;               // ระยะเริ่มวาร์ป
-    private static final int SAFE_OFFSET = 12;               // ระยะห่างจากผู้เล่นตอนโผล่
-    private static final int WARP_FRAMES =
-            Math.max(1, Monster.gMonsterAnimator().get("death").length); // จำนวนเฟรม death.png เต็ม 20 เฟรม
+    // 🧭 สถานะการวาร์ป
+    private enum State { IDLE, CHARGE, WAIT, RECOVER }
 
-    // ===== 🧭 สถานะการวาร์ป =====
-    private enum State { IDLE, WARP_CHARGE, WARP_RECOVER }
+    // 🧠 ข้อมูลสถานะของมอนสเตอร์แต่ละตัว (ใช้ record ย่อโค้ดให้กระชับ)
+    private record Data(State state, int frame, int timer, long lastWarp,
+                        boolean hasTarget, String anim,
+                        int targetX, int targetY, int targetCenterX, int targetCenterY) {
 
-    // เก็บสถานะแยกสำหรับมอนแต่ละตัว (ใช้ WeakHashMap เพื่อ auto clear)
-    private static class Data {
-        State state = State.IDLE;
-        boolean animationFinished, hasTarget;
-        long lastWarpTime = System.currentTimeMillis();
-        String currentAnim = "";
-        int frameIndex, frameTimer;
-        int targetX, targetY, targetCenterX, targetCenterY;
+        static Data fresh() {
+            long now = System.currentTimeMillis();
+            return new Data(State.IDLE, 0, 0, now, false, "idle", 0, 0, 0, 0);
+        }
+
+        Data withFrameTimer(int frame, int timer) {
+            return new Data(state, frame, timer, lastWarp, hasTarget, anim, targetX, targetY, targetCenterX, targetCenterY);
+        }
+
+        Data withTimer(int timer) {
+            return new Data(state, frame, timer, lastWarp, hasTarget, anim, targetX, targetY, targetCenterX, targetCenterY);
+        }
+
+        Data withLast(long last) {
+            return new Data(state, frame, timer, last, hasTarget, anim, targetX, targetY, targetCenterX, targetCenterY);
+        }
+
+        Data withTarget(boolean hasTarget, int x, int y, int cx, int cy) {
+            return new Data(state, frame, timer, lastWarp, hasTarget, anim, x, y, cx, cy);
+        }
     }
+
+    // 🧩 ค่าคงที่เฟรมและเวลา
+    private static final int WARP_FRAMES = Math.max(1, Monster.gMonsterAnimator().get("death").length);
+    private static final int RECOVER_FRAMES = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
+    private static final int WAIT_TICKS = 10 * FRAME_DELAY_MONSTER;
 
     private final WeakHashMap<Monster, Data> states = new WeakHashMap<>();
 
-    // ===== 🎯 Logic หลัก =====
+    // 🎯 Logic หลัก: ควบคุมสถานะการวาร์ปของมอนสเตอร์
     @Override
     public void attack(Monster self, Player player, Level level) {
-        Data data = state(self);
+        Data data = data(self);
         if (player == null) {
-            idle(self, data);
+            states.put(self, toIdle(self, data));
             return;
         }
 
-        switch (data.state) {
+        Data next = switch (data.state()) {
             case IDLE -> handleIdle(self, player, data);
-            case WARP_CHARGE -> handleWarpCharge(self, player, data);
-            case WARP_RECOVER -> handleWarpRecover(self, data);
-        }
+            case CHARGE -> handleCharge(self, player, data);
+            case WAIT -> handleWait(self, data);
+            case RECOVER -> handleRecover(self, data);
+        };
+        states.put(self, next);
     }
 
     @Override
     public void afterUpdate(Monster self) {
-        // 🔹 ป้องกันไม่ให้มอนออกนอกขอบจอหลังวาร์ป
+        // 🔹 ป้องกันมอนสเตอร์ออกนอกขอบจอหลังวาร์ป
         self.clamp();
     }
 
-    // ===== 🎨 เอฟเฟกต์วงก่อนวาร์ป =====
-    @Override
-    public void render(Graphics2D g, Monster self) {
-        Data data = states.get(self);
-        if (data == null || !data.hasTarget || data.state != State.WARP_CHARGE) return;
-
-        float frameProgress = (data.frameIndex + data.frameTimer / (float) FRAME_DELAY) /
-                Math.max(1f, WARP_FRAMES);
-        frameProgress = Utils.clamp(frameProgress, 0f, 1f);
-
-        int baseRadius = Math.max(self.getSize(), self.getSize() + SAFE_OFFSET * 2);
-        int radius = (int) (baseRadius * (0.6f + 0.4f * frameProgress));
-
-        var oldStroke = g.getStroke();
-        var oldComposite = g.getComposite();
-
-        EffectRenderer.setAlpha(g, 0.65f);
-        g.setColor(new Color(120, 255, 200));
-        g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-        int diameter = radius * 2;
-        g.drawOval(data.targetCenterX - radius, data.targetCenterY - radius, diameter, diameter);
-
-        g.setStroke(oldStroke);
-        g.setComposite(oldComposite);
-    }
-
+    // 🔄 รีเซ็ตสถานะมอนสเตอร์
     @Override
     public void reset(Monster self) {
-        Data data = state(self);
-        data.state = State.IDLE;
-        int frameIndex, frameTimer;
-        data.animationFinished = false;
-        data.lastWarpTime = System.currentTimeMillis();
-        data.hasTarget = false;
         self.unlockAnimation();
-        switchAnimation(self, data, "idle");
+        self.setAnimation("idle");
+        states.put(self, Data.fresh());
     }
 
     // ===== 💤 สถานะ Idle =====
-    private void handleIdle(Monster self, Player player, Data data) {
-        self.unlockAnimation();
-        switchAnimation(self, data, "idle");
-        self.follow(player.getX(), player.getY()); // เดินตามผู้เล่นปกติ
+    private Data handleIdle(Monster self, Player player, Data data) {
+        Data next = toIdle(self, data);
+        self.follow(player.getX(), player.getY()); // เดินตามผู้เล่น
 
         long now = System.currentTimeMillis();
-        if (now - data.lastWarpTime < WARP_COOLDOWN_MS) return; // ยังไม่ถึงคูลดาวน์
+        if (now - next.lastWarp < WARP_COOLDOWN_MS) return next;
 
         int dx = player.getCenterX() - self.getCenterX();
         int dy = player.getCenterY() - self.getCenterY();
-        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return; // ผู้เล่นอยู่ไกลเกิน
+        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return next;
 
-        // 🔹 เริ่มเตรียมวาร์ป
-        enterState(self, data, State.WARP_CHARGE, "death");
-        if (player != null) {
-            lockWarpTarget(self, player, data);
-        }
+        // 🔹 เริ่มวาร์ป
+        next = changeState(self, next, State.CHARGE, "death", true, true);
+        return warpToBehindPlayer(self, player, next, false);
     }
 
-    // ===== 🌀 เริ่มวาร์ป (death.png เดินหน้า) =====
-    private void handleWarpCharge(Monster self, Player player, Data data) {
-        self.setVelocity(0, 0); // 🔸 ล็อกมอนให้นิ่ง
-
-        if (!data.hasTarget && player != null) {
-            lockWarpTarget(self, player, data);
-        }
-
-        // 🔹 เล่น death.png ครบ 20 เฟรมก่อนจะวาร์ป
-        if (advanceAnimation(self, data, WARP_FRAMES)) {
-            teleportBehind(self, player, data);
-            data.hasTarget = false;
-            
-            // ✅ เมื่อจบให้เล่น death_reverse ย้อนกลับ 20 เฟรม
-            enterState(self, data, State.WARP_RECOVER, "death_reverse");
-        }
-    }
-
-    // ===== 🔁 เล่น death.png แบบย้อนกลับ =====
-    private void handleWarpRecover(Monster self, Data data) {
+    // ===== 🌀 เริ่มวาร์ป (เล่น death.png เดินหน้า) =====
+    private Data handleCharge(Monster self, Player player, Data data) {
         self.setVelocity(0, 0);
-        int reverseFrames = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
-        if (advanceAnimation(self, data, reverseFrames)) {
-            data.lastWarpTime = System.currentTimeMillis();
-            enterState(self, data, State.IDLE, "idle");
+        Data next = warpToBehindPlayer(self, player, data, false);
+        next = updateAnim(self, next, WARP_FRAMES);
+
+        if (isFinished(next, WARP_FRAMES)) {
+            next = warpToBehindPlayer(self, player, next, true);
+            return changeState(self, next, State.WAIT, "death", true, false);
         }
+        return next;
     }
 
-    // ===== 🧠 ฟังก์ชันช่วยจัดการสถานะ =====
-    private void idle(Monster self, Data data) {
-        self.unlockAnimation();
-        switchAnimation(self, data, "idle");
-        data.state = State.IDLE;
-    }
-
-    private Data state(Monster self) {
-        return states.computeIfAbsent(self, s -> new Data());
-    }
-
-    private void enterState(Monster self, Data data, State next, String anim) {
-        data.state = next;
-        resetAnim(data);
-        switchAnimation(self, data, anim);
-        if (next == State.IDLE) {
-            self.unlockAnimation();
-        } else {
-            self.lockAnimation();
-            self.setAnimationFrame(data.frameIndex);
+    // ===== ⏳ หน่วงช่วงนิ่งก่อนโผล่ =====
+    private Data handleWait(Monster self, Data data) {
+        self.setVelocity(0, 0);
+        int timer = data.timer + 1;
+        if (timer >= WAIT_TICKS) {
+            return changeState(self, data, State.RECOVER, "death_reverse", true, true);
         }
+        return data.withTimer(timer);
     }
 
-    private void resetAnim(Data data) {
-        data.frameIndex = 0;
-        data.frameTimer = 0;
-        data.animationFinished = false;
-        data.hasTarget = false;
-    }
-
-    private void switchAnimation(Monster self, Data data, String anim) {
-        if (!anim.equals(data.currentAnim)) {
-            self.setAnimation(anim);
-            data.currentAnim = anim;
+    // ===== 🔁 เล่น death_reverse เพื่อโผล่กลับ =====
+    private Data handleRecover(Monster self, Data data) {
+        self.setVelocity(0, 0);
+        Data next = updateAnim(self, data, RECOVER_FRAMES);
+        if (isFinished(next, RECOVER_FRAMES)) {
+            next = next.withLast(System.currentTimeMillis());
+            return changeState(self, next, State.IDLE, "idle", false, true);
         }
+        return next;
     }
 
-    private boolean advanceAnimation(Monster self, Data data, int totalFrames) {
-        if (data.animationFinished || totalFrames <= 0) {
-            return true;
-        }
+    // ===== 🧠 ฟังก์ชันช่วยจัดการ =====
 
-        if (++data.frameTimer >= FRAME_DELAY) {
-            data.frameTimer = 0;
+    // 🔸 คำนวณตำแหน่งหลังผู้เล่น และย้ายมอนสเตอร์ไปที่นั่นถ้า teleportNow=true
+    private Data warpToBehindPlayer(Monster self, Player player, Data data, boolean teleportNow) {
+        if (player == null) return data;
 
-            data.frameIndex++;
-            if (data.frameIndex >= totalFrames) {
-                data.frameIndex = totalFrames - 1;
-                data.animationFinished = true;
-            }
-            self.setAnimationFrame(data.frameIndex);
-        }
-
-        return data.animationFinished;
-    }
-
-    // ===== 📍 คำนวณตำแหน่งวาร์ป =====
-    private void lockWarpTarget(Monster self, Player player, Data data) {
         int dx = player.getCenterX() - self.getCenterX();
         int dy = player.getCenterY() - self.getCenterY();
         double len = Math.hypot(dx, dy);
-        double vx = dx, vy = dy;
-        if (len < 1e-3) { vx = 1; vy = 0; len = 1; }
+        double nx = len < 1e-3 ? 1 : dx / len;
+        double ny = len < 1e-3 ? 0 : dy / len;
 
-        double nx = vx / len, ny = vy / len;
-        int dist = player.getSize() + self.getSize() + SAFE_OFFSET;
+        int distance = player.getSize() + self.getSize() + SAFE_OFFSET;
+        int newX = Utils.clamp(player.getCenterX() - (int) (nx * distance) - self.getSize() / 2,
+                0, self.panelWidth - self.getSize());
+        int newY = Utils.clamp(player.getCenterY() - (int) (ny * distance) - self.getSize() / 2,
+                0, self.panelHeight - self.getSize());
 
-        int newX = Utils.clamp(player.getCenterX() - (int) (nx * dist) - self.getSize() / 2, 0, self.panelWidth - self.getSize());
-        int newY = Utils.clamp(player.getCenterY() - (int) (ny * dist) - self.getSize() / 2, 0, self.panelHeight - self.getSize());
+        int centerX = newX + self.getSize() / 2;
+        int centerY = newY + self.getSize() / 2;
 
-        data.targetX = newX;
-        data.targetY = newY;
-        data.targetCenterX = newX + self.getSize() / 2;
-        data.targetCenterY = newY + self.getSize() / 2;
-        data.hasTarget = true;
+        if (teleportNow) self.setPosition(newX, newY);
+        return data.withTarget(true, newX, newY, centerX, centerY);
     }
 
-    private void teleportBehind(Monster self, Player player, Data data) {
-        if (!data.hasTarget && player != null) {
-            lockWarpTarget(self, player, data);
+    // 🔧 เปลี่ยนสถานะ + ตั้งอนิเมชัน
+    private Data changeState(Monster self, Data data, State nextState, String anim, boolean lock, boolean resetFrame) {
+        if (!anim.equals(data.anim)) self.setAnimation(anim);
+        if (lock) self.lockAnimation(); else self.unlockAnimation();
+        int frame = resetFrame ? 0 : data.frame;
+        self.setAnimationFrame(frame);
+        return new Data(nextState, frame, 0, data.lastWarp, false, anim,
+                data.targetX, data.targetY, data.targetCenterX, data.targetCenterY);
+    }
+
+    // 🎞 เดินเฟรมตามดีเลย์มอนสเตอร์
+    private Data updateAnim(Monster self, Data data, int totalFrames) {
+        if (totalFrames <= 0) return data;
+        int frame = data.frame;
+        int timer = data.timer + 1;
+        if (timer >= FRAME_DELAY_MONSTER) {
+            timer = 0;
+            frame = Math.min(frame + 1, totalFrames - 1);
+            self.setAnimationFrame(frame);
         }
-        self.setPosition(data.targetX, data.targetY);
+        return data.withFrameTimer(frame, timer);
+    }
+
+    // ✅ ตรวจว่าเล่นครบเฟรมหรือยัง
+    private boolean isFinished(Data data, int totalFrames) {
+        return totalFrames <= 0 || (data.frame >= totalFrames - 1 && data.timer == 0);
+    }
+
+    // 🌿 รีเซ็ตเป็นสถานะ idle
+    private Data toIdle(Monster self, Data data) {
+        self.unlockAnimation();
+        if (!"idle".equals(data.anim) || data.state != State.IDLE) {
+            self.setAnimation("idle");
+            self.setAnimationFrame(0);
+            return new Data(State.IDLE, 0, 0, data.lastWarp, false, "idle",
+                    data.targetX, data.targetY, data.targetCenterX, data.targetCenterY);
+        }
+        return data;
+    }
+
+    // 📦 ดึงหรือสร้างข้อมูลสถานะใหม่
+    private Data data(Monster self) {
+        return states.computeIfAbsent(self, s -> Data.fresh());
     }
 }

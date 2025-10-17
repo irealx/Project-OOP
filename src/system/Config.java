@@ -28,6 +28,10 @@ public final class Config {
     public static final int STUN_COOLDOWN = 180;
     public static final int STUN_RING_RADIUS = 480;
     public static final int STUN_RING_THICKNESS = 10;
+    public static final int FRAME_DELAY_MONSTER = 3;
+    public static final long WARP_COOLDOWN_MS = 5000L;
+    public static final int WARP_RANGE = 320;
+    public static final int SAFE_OFFSET = 12;
     public static final int WRAP_MARGIN = 8;
     public static final int SHOOT_DASH_MULTIPLIER = 3;
     public static final int SHOOT_DASH_INTERVAL = 45;

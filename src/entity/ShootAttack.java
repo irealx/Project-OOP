@@ -10,7 +10,8 @@ import static system.Config.*;
 
 // ShootAttack — มอนสเตอร์ยิงพลังงานกระจายสามทิศพร้อมเอฟเฟกต์กระสุน
 public class ShootAttack extends BaseAttack<ShootAttack.State> {
-    private static final int SUMMON_FRAMES = Math.max(1, Monster.gMonsterAnimator().get("summon").length);
+    private static final int SUMMON_FRAMES = Math.max(1,
+        Monster.gMonsterAnimator().get("summon").length);
     private static final long COOLDOWN_MS = SHOOT_COOLDOWN_TICKS * TIMER_DELAY_MS;
     
     static class State extends BaseAttack.State{

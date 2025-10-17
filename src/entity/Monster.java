@@ -201,13 +201,13 @@ public class Monster extends Sprite {
         List<Monster> list = new ArrayList<>();
 
         Monster stun = new Monster(AttackType.STUN);
-        stun.setActiveLevels(1, 4);
+        stun.setActiveLevels(2, 5);
 
         Monster wrap = new Monster(AttackType.WRAP);
         wrap.setActiveLevels(0, 3);
 
         Monster shoot = new Monster(AttackType.SHOOT);
-        shoot.setActiveLevels(2, 5);
+        shoot.setActiveLevels(1, 4);
 
         list.add(stun);
         list.add(wrap);

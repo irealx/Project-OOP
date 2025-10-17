@@ -276,8 +276,8 @@ public class GamePanel extends JPanel implements ActionListener {
         if (input != null) {
             JOptionPane.showMessageDialog(
                     this,
-                    "รหัสไม่ถูกต้อง ลองสำรวจรูปภาพให้ครบทั้ง 4 บานก่อนนะครับ",
-                    "รหัสผิดพลาด",
+                    "Incorrect Answer Hint : sum",
+                    "Wrong Answer",
                     JOptionPane.WARNING_MESSAGE
             );
         }

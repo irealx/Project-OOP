@@ -21,23 +21,22 @@ public class MonsterAnimator {
 
     public MonsterAnimator() {
         // โหลด sprite ทั้งหมดที่ใช้ในเกม (เพิ่มหรือแก้ path ได้ง่ายในอนาคต)
-        load("idle",        "Pic/character/Mon/idle.png",4);
-        load("death",       "Pic/character/Mon/death.png",20);
-        load("skill1",      "Pic/character/Mon/skill1.png",10);
-        load("summon",      "Pic/character/Mon/summon.png",10);
-        load("summonIdle", "Pic/character/Mon/summonIdle.png", 1);
-
+        loadCustom("idle",        "Pic/character/Mon/idle.png", 4, 100, 100);
+        loadCustom("death",       "Pic/character/Mon/death.png", 20, 100, 100);
+        loadCustom("skill1",      "Pic/character/Mon/skill1.png", 10, 100, 100);
+        loadCustom("summon",      "Pic/character/Mon/summon.png", 10, 100, 100);
+        loadCustom("summonIdle",  "Pic/character/Mon/summonIdle.png", 4, 50, 50);
         mirrorFrom("death_reverse", "death");
     }
 
     /**
-     * โหลดภาพ sprite sheet และตัดออกเป็นเฟรม
+     * โหลด sprite ที่มีขนาดเฟรมไม่เท่ากับ 100x100 (เช่น 50x50)
      */
-    private void load(String name, String path, int frames) {
+    private void loadCustom(String name, String path, int frames, int frameW, int frameH) {
         try {
             BufferedImage sheet = ImageIO.read(new File(path));
-            int cols = Math.max(1, sheet.getWidth() / FRAME_WIDTH);
-            int rows = Math.max(1, sheet.getHeight() / FRAME_HEIGHT);
+            int cols = Math.max(1, sheet.getWidth() / frameW);
+            int rows = Math.max(1, sheet.getHeight() / frameH);
             int available = cols * rows;
             int frameCount = Math.min(frames, available);
             BufferedImage[] arr = new BufferedImage[frameCount];
@@ -45,24 +44,22 @@ public class MonsterAnimator {
             for (int i = 0; i < frameCount; i++) {
                 int col = i % cols;
                 int row = i / cols;
-                if (row >= rows) break; // ป้องกัน index เกินภาพจริง
+                if (row >= rows) break;
 
-                int x = col * FRAME_WIDTH;
-                int y = row * FRAME_HEIGHT;
-                int w = Math.min(FRAME_WIDTH, sheet.getWidth() - x);
-                int h = Math.min(FRAME_HEIGHT, sheet.getHeight() - y);
+                int x = col * frameW;
+                int y = row * frameH;
+                int w = Math.min(frameW, sheet.getWidth() - x);
+                int h = Math.min(frameH, sheet.getHeight() - y);
                 arr[i] = sheet.getSubimage(x, y, w, h);
             }
-
-            animations.put(name, arr);
+        animations.put(name, arr);
         } catch (IOException e) {
-            System.err.println("❌ Cannot load: " + path);
-            animations.put(name, new BufferedImage[0]); // ป้องกัน NullPointer
+            animations.put(name, new BufferedImage[0]);
         } catch (Exception e) {
-            System.err.println("⚠ Unexpected error loading " + name + ": " + e.getMessage());
             animations.put(name, new BufferedImage[0]);
         }
     }
+
 
     /**
      * ดึงภาพตามชื่ออนิเมชัน เช่น "idle", "death"

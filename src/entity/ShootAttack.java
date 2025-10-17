@@ -6,17 +6,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.WeakHashMap;
 import system.Level;
+import static system.Config.*;
 
 /**
- * ShootAttack — มอนสเตอร์สายยิงพลังงาน (ภาษาไทย)
+ * ShootAttack — มอนสเตอร์สายยิงพลังงาน
  * ใช้แอนิเมชัน summon.png ก่อนปล่อยกระสุน 3 ทิศทางพร้อมกัน
  */
 public class ShootAttack implements Monster.AttackBehavior {
 
     // ===== ค่าคงที่หลัก =====
-    private static final long SHOOT_COOLDOWN_MS = 2000L;                 // พัก 2 วินาทีระหว่างชุดยิง
-    private static final int FRAME_DELAY = 6;                            // ความเร็วเฟรมของแอนิเมชัน summon
-    private static final int RANGE = 360;                                 // ระยะที่เริ่มยิง
     private static final int SUMMON_FRAMES = Math.max(1,
             Monster.gMonsterAnimator().get("summon").length);
 
@@ -37,7 +35,7 @@ public class ShootAttack implements Monster.AttackBehavior {
     public void attack(Monster self, Player player, Level level) {
         Data data = state(self);
 
-        // 🔹 อัปเดตกระสุนก่อนเสมอ
+        // อัปเดตกระสุนก่อนเสมอ
         updateProjectiles(data, player, self);
 
         if (player == null) {
@@ -47,7 +45,7 @@ public class ShootAttack implements Monster.AttackBehavior {
         }
 
         if (data.attacking) {
-            // 🔸 ระหว่างร่ายให้ยืนกับที่
+            // ระหว่างร่ายให้ยืนกับที่
             self.setVelocity(0, 0);
             handleCasting(self, player, data);
             return;
@@ -55,17 +53,17 @@ public class ShootAttack implements Monster.AttackBehavior {
 
         switchAnimation(self, data, "idle");
 
-        // 🔹 เคลื่อนเข้าหาผู้เล่นอย่างค่อยเป็นค่อยไป
+        // เคลื่อนเข้าหาผู้เล่น
         self.follow(player.getX(), player.getY());
 
         long now = System.currentTimeMillis();
-        if (now - data.lastShotTime < SHOOT_COOLDOWN_MS) return;
+        if (now - data.lastShotTime < SHOOT_COOLDOWN_TICKS * TIMER_DELAY_MS) return;
 
         int dx = player.getCenterX() - self.getCenterX();
         int dy = player.getCenterY() - self.getCenterY();
-        if (dx * dx + dy * dy > RANGE * RANGE) return;
+        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return;
 
-        // 🔹 เริ่มเล่นแอนิเมชัน summon.png
+        // เริ่มเล่นแอนิเมชัน summon.png
         data.attacking = true;
         data.fired = false;
         data.frameIndex = data.frameTimer = 0;
@@ -75,12 +73,13 @@ public class ShootAttack implements Monster.AttackBehavior {
 
     @Override
     public void afterUpdate(Monster self) {
-        // 🔸 บังคับไม่ให้ออกนอกกรอบจอ
+        // บังคับไม่ให้ออกนอกกรอบจอ
         self.clamp();
     }
+
     @Override
     public void render(Graphics2D g, Monster self) {
-        // 🔹 วาดกระสุนทั้งหมด
+        // วาดกระสุนทั้งหมด
         for (Projectile projectile : state(self).projectiles) {
             projectile.draw(g);
         }
@@ -101,14 +100,14 @@ public class ShootAttack implements Monster.AttackBehavior {
     // ===== ระหว่างกำลังร่าย summon =====
     private void handleCasting(Monster self, Player player, Data data) {
         if (!data.fired && data.frameIndex >= SUMMON_FRAMES - 1) {
-            // 🔸 ยิงกระสุน 3 ทิศเมื่อถึงเฟรมสุดท้าย
+            // ยิงกระสุน 3 ทิศเมื่อถึงเฟรมสุดท้าย
             fireProjectiles(self, player, data);
             data.fired = true;
             data.lastShotTime = System.currentTimeMillis();
         }
 
         if (advanceAnimation(data, SUMMON_FRAMES)) {
-            // 🔹 เมื่อเล่นครบ → กลับไป idle
+            // เมื่อเล่นครบ → กลับไป idle
             data.attacking = false;
             switchAnimation(self, data, "idle");
         }
@@ -117,6 +116,7 @@ public class ShootAttack implements Monster.AttackBehavior {
     private Data state(Monster self) {
         return states.computeIfAbsent(self, s -> new Data());
     }
+
     private void switchAnimation(Monster self, Data data, String animation) {
         if (!animation.equals(data.currentAnim)) {
             self.setAnimation(animation);
@@ -127,7 +127,7 @@ public class ShootAttack implements Monster.AttackBehavior {
     private boolean advanceAnimation(Data data, int totalFrames) {
         if (data.animationFinished) return true;
 
-        if (++data.frameTimer >= FRAME_DELAY) {
+        if (++data.frameTimer >= FRAME_DELAY_MONSTER) {
             data.frameTimer = 0;
             data.frameIndex++;
             if (data.frameIndex >= totalFrames) {

@@ -6,7 +6,7 @@ import java.awt.image.BufferedImage;
 
 /**
  * จัดการกระสุนพลังงานของมอนสเตอร์สายยิง
- * ใช้ sprite summonIdle.png (4 เฟรม ขนาด 100x100)
+ * ใช้ sprite summonIdle.png (4 เฟรม ขนาด 50x50)
  */
 
 public class Projectile {
@@ -15,13 +15,10 @@ public class Projectile {
     private static final int FRAME_DELAY = 5;
     private static final BufferedImage[] FRAMES =
             Monster.gMonsterAnimator().get("summonIdle");
-    static {
-        System.out.println("Loaded FRAMES: " + (FRAMES == null ? "null" : FRAMES.length));
-    }
     private static final int BASE_FRAME_SIZE =
-            (FRAMES.length > 0 ? FRAMES[0].getWidth() : 100);
-    private static final double DRAW_SCALE = 0.25; // ลดขนาดกระสุนลง
-    private static final int DRAW_SIZE = (int) Math.round(BASE_FRAME_SIZE * DRAW_SCALE);
+            (FRAMES.length > 0 ? FRAMES[0].getWidth() : 50);
+    private static final int TARGET_DRAW_SIZE = 50; // ขนาดจริงที่อยากให้เห็นบนจอ (pixel)
+    private static final int DRAW_SIZE = TARGET_DRAW_SIZE;
 
     private double x;
     private double y;

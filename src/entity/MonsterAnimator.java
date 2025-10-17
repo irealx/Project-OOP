@@ -21,10 +21,13 @@ public class MonsterAnimator {
 
     public MonsterAnimator() {
         // โหลด sprite ทั้งหมดที่ใช้ในเกม (เพิ่มหรือแก้ path ได้ง่ายในอนาคต)
-        load("idle",   "Pic/character/Mon/idle.png",   4);
-        load("death",  "Pic/character/Mon/death.png", 10);
-        load("skill1", "Pic/character/Mon/skill1.png",10);
-        load("summon", "Pic/character/Mon/summon.png", 4);
+        load("idle",        "Pic/character/Mon/idle.png",        4);
+        load("death",       "Pic/character/Mon/death.png",      10);
+        load("skill1",      "Pic/character/Mon/skill1.png",     10);
+        load("summon",      "Pic/character/Mon/summon.png",     10);
+        load("summonIdle",  "Pic/character/Mon/summonIdle.png",  4);
+
+        mirrorFrom("death_reverse", "death");
     }
 
     /**
@@ -55,5 +58,22 @@ public class MonsterAnimator {
      */
     public BufferedImage[] get(String name) {
         return animations.getOrDefault(name, new BufferedImage[0]);
+    }
+
+    /**
+     * สร้างชุดเฟรมแบบย้อนกลับจากอนิเมชันเดิม เช่น death -> death_reverse
+     */
+    private void mirrorFrom(String target, String source) {
+        BufferedImage[] origin = animations.get(source);
+        if (origin == null || origin.length == 0) {
+            animations.put(target, new BufferedImage[0]);
+            return;
+        }
+
+        BufferedImage[] reversed = new BufferedImage[origin.length];
+        for (int i = 0; i < origin.length; i++) {
+            reversed[i] = origin[origin.length - 1 - i];
+        }
+        animations.put(target, reversed);
     }
 }

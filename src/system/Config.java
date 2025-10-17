@@ -15,7 +15,7 @@ public final class Config {
     public static final double PLAYER_SPRITE_SCALE = 4;
 
     // REFACTOR: ความเร็วและคูลดาวน์ของวัตถุถูกเก็บในที่เดียวเพื่อลดตัวเลขกระจัดกระจาย
-    public static final int PLAYER_SPEED = 4;
+    public static final int PLAYER_SPEED = 8;
     public static final int PLAYER_LIGHT_RADIUS = 160;
     public static final int[] MONSTER_SPEED = { 2, 3, 2 };
     public static final int[] MONSTER_LIGHT = { 120, 120, 140 };

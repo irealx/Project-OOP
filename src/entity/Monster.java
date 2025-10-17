@@ -176,10 +176,10 @@ public class Monster extends Sprite {
         List<Monster> list = new ArrayList<>();
 
         Monster stun = new Monster(AttackType.STUN);
-        stun.setActiveLevels(0, 3);
+        stun.setActiveLevels(1, 4);
 
         Monster wrap = new Monster(AttackType.WRAP);
-        wrap.setActiveLevels(1, 4);
+        wrap.setActiveLevels(0, 3);
 
         Monster shoot = new Monster(AttackType.SHOOT);
         shoot.setActiveLevels(2, 5);

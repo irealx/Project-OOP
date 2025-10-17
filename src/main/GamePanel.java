@@ -262,9 +262,13 @@ public class GamePanel extends JPanel implements ActionListener {
         if (level.validatePassword(input)) {
             int next = hit.type() == Door.Type.ADVANCE
                     ? (levelIndex + 1) % Config.TOTAL_LEVELS
-                    : (levelIndex - 1 + Config.TOTAL_LEVELS) % Config.TOTAL_LEVELS;
+                    : Math.max(0, levelIndex - 1);
 
-            resetLevel(next);
+            if (next != levelIndex) {
+                resetLevel(next);
+            } else {
+                closeInteraction(level);
+            }
             requestFocusInWindow();
             return;
         }

@@ -1,8 +1,6 @@
 package entity;
 
-import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -19,13 +17,8 @@ public class ShootAttack implements Monster.AttackBehavior {
     private static final long SHOOT_COOLDOWN_MS = 2000L;                 // พัก 2 วินาทีระหว่างชุดยิง
     private static final int FRAME_DELAY = 6;                            // ความเร็วเฟรมของแอนิเมชัน summon
     private static final int RANGE = 360;                                 // ระยะที่เริ่มยิง
-    private static final double PROJECTILE_SPEED = 6.0;                  // ความเร็วกระสุน
-    private static final double PROJECTILE_MAX_DISTANCE = 640.0;         // ระยะสูงสุดก่อนหายไป
-    private static final int PROJECTILE_SIZE = 26;                       // ขนาดสเกลการวาดกระสุน
     private static final int SUMMON_FRAMES = Math.max(1,
             Monster.gMonsterAnimator().get("summon").length);
-    private static final BufferedImage[] PROJECTILE_FRAMES =
-            Monster.gMonsterAnimator().get("summonIdle");
 
     private static class Data {
         boolean attacking;
@@ -150,7 +143,7 @@ public class ShootAttack implements Monster.AttackBehavior {
         while (it.hasNext()) {
             Projectile projectile = it.next();
             projectile.update(player, self.panelWidth, self.panelHeight);
-            if (!projectile.active) {
+            if (!projectile.isActive()) {
                 it.remove();
             }
         }
@@ -169,88 +162,6 @@ public class ShootAttack implements Monster.AttackBehavior {
                     Math.cos(angle),
                     Math.sin(angle));
             data.projectiles.add(projectile);
-        }
-    }
-
-    // ===== คลาสภายในสำหรับกระสุน =====
-    static class Projectile {
-        double x, y, dx, dy;
-        final double speed = PROJECTILE_SPEED;
-        double distance;
-        final double maxDistance = PROJECTILE_MAX_DISTANCE;
-        int frameIndex;
-        int frameTimer;
-        boolean active = true;
-
-        private static final int FRAME_DELAY = 5;
-
-        Projectile(double startX, double startY, double dirX, double dirY) {
-            this.x = startX;
-            this.y = startY;
-            double len = Math.hypot(dirX, dirY);
-            if (len < 1e-4) {
-                this.dx = 1;
-                this.dy = 0;
-            } else {
-                this.dx = dirX / len;
-                this.dy = dirY / len;
-            }
-        }
-
-        void update(Player player, int boundsW, int boundsH) {
-            if (!active) return;
-
-            x += dx * speed;
-            y += dy * speed;
-            distance += speed;
-
-            // 🔹 ถ้าเดินไกลเกินกำหนดให้สลายตัว
-            if (distance >= maxDistance) {
-                active = false;
-                return;
-            }
-
-            // 🔹 ถ้าออกนอกขอบให้หยุดแสดงทันที
-            if (x < -PROJECTILE_SIZE || y < -PROJECTILE_SIZE
-                    || x > boundsW + PROJECTILE_SIZE || y > boundsH + PROJECTILE_SIZE) {
-                active = false;
-                return;
-            }
-
-            // 🔸 ตรวจการชนกับผู้เล่น (โดนแล้วตายทันที)
-            if (player != null && !player.isDead()) {
-                int px = player.getX();
-                int py = player.getY();
-                int size = player.getSize();
-                if (x + PROJECTILE_SIZE / 2.0 > px && x - PROJECTILE_SIZE / 2.0 < px + size
-                        && y + PROJECTILE_SIZE / 2.0 > py && y - PROJECTILE_SIZE / 2.0 < py + size) {
-                    player.die();
-                    active = false;
-                    return;
-                }
-            }
-
-            // 🔹 หมุนเฟรมของกระสุนให้เคลื่อนไหวต่อเนื่อง
-            if (++frameTimer >= FRAME_DELAY) {
-                frameTimer = 0;
-                frameIndex = (frameIndex + 1) % Math.max(1, PROJECTILE_FRAMES.length);
-            }
-        }
-
-        void draw(Graphics2D g) {
-            if (!active) return;
-
-            int drawX = (int) Math.round(x - PROJECTILE_SIZE / 2.0);
-            int drawY = (int) Math.round(y - PROJECTILE_SIZE / 2.0);
-            if (PROJECTILE_FRAMES.length > 0) {
-                BufferedImage frame = PROJECTILE_FRAMES[frameIndex % PROJECTILE_FRAMES.length];
-                g.drawImage(frame, drawX, drawY, PROJECTILE_SIZE, PROJECTILE_SIZE, null);
-                return;
-            }
-
-            // 🔸 fallback เมื่อโหลดรูปไม่สำเร็จ
-            g.setColor(new Color(120, 200, 255));
-            g.fillOval(drawX, drawY, PROJECTILE_SIZE, PROJECTILE_SIZE);
         }
     }
 }

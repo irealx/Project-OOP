@@ -10,7 +10,7 @@ import system.Utils;
 
 /**
  * WrapAttack — พฤติกรรม "วาร์ป" ของมอนสเตอร์ใน Six Door Maze
- * ใช้ death.png (10 เฟรม) เพื่อทำแอนิเมชันวาร์ป → รอ → โผล่หลังผู้เล่น
+ * ใช้ death.png (20 เฟรม) เพื่อทำแอนิเมชันวาร์ป → ย้อนแอนิเมชันกลับและออกไล่ผู้เล่นต่อ
  */
 public class WrapAttack implements Monster.AttackBehavior {
 
@@ -20,19 +20,16 @@ public class WrapAttack implements Monster.AttackBehavior {
     private static final int WARP_RANGE = 320;               // ระยะเริ่มวาร์ป
     private static final int SAFE_OFFSET = 12;               // ระยะห่างจากผู้เล่นตอนโผล่
     private static final int WARP_FRAMES =
-            Math.max(1, Monster.gMonsterAnimator().get("death").length / 2); // จำนวนเฟรม death.png
-    private static final int WARP_WAIT_TICKS = FRAME_DELAY * 10; // รอ 10 เฟรมก่อนโผล่กลับ
+            Math.max(1, Monster.gMonsterAnimator().get("death").length); // จำนวนเฟรม death.png เต็ม 20 เฟรม
 
     // ===== 🧭 สถานะการวาร์ป =====
-    private enum State { IDLE, WARP_START, WARP_WAIT, WARP_END }
+    private enum State { IDLE, WARP_CHARGE, WARP_RECOVER }
 
     // เก็บสถานะแยกสำหรับมอนแต่ละตัว (ใช้ WeakHashMap เพื่อ auto clear)
     private static class Data {
         State state = State.IDLE;
-        int frameIndex, frameTimer, waitTimer;
         boolean animationFinished, hasTarget;
         long lastWarpTime = System.currentTimeMillis();
-        double dirX, dirY;
         String currentAnim = "";
         int targetX, targetY, targetCenterX, targetCenterY;
     }
@@ -50,9 +47,8 @@ public class WrapAttack implements Monster.AttackBehavior {
 
         switch (data.state) {
             case IDLE -> handleIdle(self, player, data);
-            case WARP_START -> handleWarpStart(self, player, data);
-            case WARP_WAIT -> handleWarpWait(self, data);
-            case WARP_END -> handleWarpEnd(self, data);
+            case WARP_CHARGE -> handleWarpCharge(self, player, data);
+            case WARP_RECOVER -> handleWarpRecover(self, data);
         }
     }
 
@@ -66,7 +62,7 @@ public class WrapAttack implements Monster.AttackBehavior {
     @Override
     public void render(Graphics2D g, Monster self) {
         Data data = states.get(self);
-        if (data == null || !data.hasTarget || data.state != State.WARP_START) return;
+        if (data == null || !data.hasTarget || data.state != State.WARP_CHARGE) return;
 
         float frameProgress = (data.frameIndex + data.frameTimer / (float) FRAME_DELAY) /
                 Math.max(1f, WARP_FRAMES);
@@ -93,10 +89,9 @@ public class WrapAttack implements Monster.AttackBehavior {
     public void reset(Monster self) {
         Data data = state(self);
         data.state = State.IDLE;
-        data.frameIndex = data.frameTimer = 0;
+        int frameIndex, frameTimer;
         data.animationFinished = false;
         data.lastWarpTime = System.currentTimeMillis();
-        data.waitTimer = 0;
         data.hasTarget = false;
         switchAnimation(self, data, "idle");
     }
@@ -114,44 +109,35 @@ public class WrapAttack implements Monster.AttackBehavior {
         if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return; // ผู้เล่นอยู่ไกลเกิน
 
         // 🔹 เริ่มเตรียมวาร์ป
-        data.dirX = dx;
-        data.dirY = dy;
-        enterState(self, data, State.WARP_START, "death");
+        enterState(self, data, State.WARP_CHARGE, "death");
     }
 
     // ===== 🌀 เริ่มวาร์ป (death.png เดินหน้า) =====
-    private void handleWarpStart(Monster self, Player player, Data data) {
+    private void handleWarpCharge(Monster self, Player player, Data data) {
         self.setVelocity(0, 0); // 🔸 ล็อกมอนให้นิ่ง
 
-        if (!data.hasTarget && player != null)
+        if (player != null)
             prepareWarpTarget(self, player, data);
 
-        // 🔹 เล่นเฟรมครึ่งแรก (0–9)
+        // 🔹 เล่น death.png ครบ 20 เฟรมก่อนจะวาร์ป
         if (advanceAnimation(data, WARP_FRAMES)) {
             teleportBehind(self, player, data);
-
-            // ✅ เมื่อจบครึ่งแรก ให้เตรียมเข้าสถานะรอ
-            data.state = State.WARP_WAIT;
-            data.waitTimer = WARP_WAIT_TICKS;
-            data.animationFinished = false;
-
-            // 🔹 เริ่ม reverse ที่เฟรมครึ่งหลัง (10)
-            data.frameIndex = WARP_FRAMES; 
+            data.hasTarget = false;
+            
+            // ✅ เมื่อจบให้เล่น death_reverse ย้อนกลับ 20 เฟรม
+            enterState(self, data, State.WARP_RECOVER, "death_reverse");
+            int reverseFrames = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
+            data.frameIndex = reverseFrames - 1;
             data.frameTimer = 0;
             data.hasTarget = false;
         }
     }
-    // ===== ⏳ รอคูลดาวน์ก่อนย้อนเฟรม =====
-    private void handleWarpWait(Monster self, Data data) {
-        self.setVelocity(0, 0);
-        if (data.waitTimer-- > 0) return;
-        enterState(self, data, State.WARP_END, "death_reverse");
-    }
 
     // ===== 🔁 เล่น death.png แบบย้อนกลับ =====
-    private void handleWarpEnd(Monster self, Data data) {
+    private void handleWarpRecover(Monster self, Data data) {
         self.setVelocity(0, 0);
-        if (advanceAnimation(data, WARP_FRAMES)) {
+        int reverseFrames = Math.max(1, Monster.gMonsterAnimator().get("death_reverse").length);
+        if (advanceAnimation(data, reverseFrames)) {
             data.lastWarpTime = System.currentTimeMillis();
             enterState(self, data, State.IDLE, "idle");
         }
@@ -214,8 +200,10 @@ public class WrapAttack implements Monster.AttackBehavior {
 
     // ===== 📍 คำนวณตำแหน่งวาร์ป =====
     private void prepareWarpTarget(Monster self, Player player, Data data) {
-        double vx = data.dirX, vy = data.dirY;
-        double len = Math.hypot(vx, vy);
+        int dx = player.getCenterX() - self.getCenterX();
+        int dy = player.getCenterY() - self.getCenterY();
+        double len = Math.hypot(dx, dy);
+        double vx = dx, vy = dy;
         if (len < 1e-3) { vx = 1; vy = 0; len = 1; }
 
         double nx = vx / len, ny = vy / len;

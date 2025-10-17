@@ -56,7 +56,7 @@ public class GameMenu {
         drawCenteredString(g2, "Avoid Monsters and Find Answer to Enter the Correct Door", centerX, startY + 110);
 
         // การ์ดมอนสเตอร์
-        int cardTop = startY + 180;
+        int cardTop = startY + 250;
         int spacing = width / 4;
         drawMonsterCard(g2, centerX - spacing, cardTop, new Color(70,150,255),
                 "STUN MONSTER", "Releases a blue shockwave that stuns you.", stunImg);

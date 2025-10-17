@@ -16,9 +16,7 @@ public class Monster extends Sprite {
     private static final MonsterAnimator animator = new MonsterAnimator();
 
     // สำหรับให้ AttackBehavior ใช้เรียก animator ได้
-    public static MonsterAnimator gMonsterAnimator() {
-        return animator;
-    }
+    public static MonsterAnimator gMonsterAnimator() { return animator; }
 
     // ประเภทของการโจมตี
     public enum AttackType { STUN, WRAP, SHOOT }
@@ -39,16 +37,20 @@ public class Monster extends Sprite {
         BEHAVIOURS.put(AttackType.SHOOT, new ShootAttack());
     }
 
+    // -------------------- ตัวแปรหลัก --------------------
     private final AttackType type;          // ประเภทของมอนสเตอร์
     private AttackBehavior attackBehavior;  // พฤติกรรมเฉพาะของมอนสเตอร์
     private final boolean[] activeLevels;   // ระบุว่าแต่ละด่านมอนจะโผล่ไหม
     private boolean active;                 // สถานะการเปิดใช้งาน
 
     // ตัวแปรเกี่ยวกับแอนิเมชัน
-    private String currentAnim = "idle";    // แอนิเมชันปัจจุบัน (idle, move, death, skill1, summon)
+    private String currentAnim = "idle";    // แอนิเมชันปัจจุบัน
     private int frameIndex = 0;             // เฟรมปัจจุบัน
     private int frameTimer = 0;             // ตัวนับเวลาเปลี่ยนเฟรม
     private boolean moving = false;         // กำลังเคลื่อนไหวอยู่ไหม
+    private boolean facingLeft = false;     // จำว่ามอนหันซ้ายไหม
+
+    // ----------------------------------------------------
 
     // สร้างมอนสเตอร์ใหม่
     public Monster(AttackType type) {
@@ -84,6 +86,7 @@ public class Monster extends Sprite {
         setPosition(spawnX, spawnY);
 
         if (attackBehavior != null) attackBehavior.reset(this);
+
         frameIndex = frameTimer = 0;
         currentAnim = "idle";
     }
@@ -95,6 +98,11 @@ public class Monster extends Sprite {
         int oldX = x, oldY = y;
 
         attackBehavior.attack(this, player, level);
+
+        // 🧭 จำทิศทางล่าสุดก่อน dx ถูกรีเซ็ต
+        if (dx < 0) facingLeft = true;
+        else if (dx > 0) facingLeft = false;
+
         updateBase();
         attackBehavior.afterUpdate(this);
 
@@ -118,14 +126,33 @@ public class Monster extends Sprite {
         if (!active) return;
 
         BufferedImage[] frames = animator.get(currentAnim);
-        if (frames.length > 0) {
-            int index = Math.min(frameIndex, frames.length - 1);
-            g.drawImage(frames[index], x, y, size, size, null);
-        } else {
+        if (frames.length == 0) {
             drawBase(g);
+            return;
         }
 
-        attackBehavior.render(g, this);
+        int index = Math.min(frameIndex, frames.length - 1);
+        int drawW = (int) (size * 6);
+        int drawH = (int) (size * 6);
+        int offsetX = x - (drawW - size) / 2;
+        int offsetY = y - (drawH - size) / 2;
+
+        // 🔹 ใช้ทิศที่จำไว้จาก update()
+        boolean faceLeft = facingLeft;
+
+        // 🔹 บันทึก transform เดิมไว้ก่อน
+        java.awt.geom.AffineTransform old = g.getTransform();
+
+        if (faceLeft) {
+            g.translate(offsetX + drawW, offsetY);
+            g.scale(-1, 1);
+            g.drawImage(frames[index], 0, 0, drawW, drawH, null);
+        } else {
+            g.drawImage(frames[index], offsetX, offsetY, drawW, drawH, null);
+        }
+
+        g.setTransform(old); // คืน transform เดิม
+        attackBehavior.render(g, this); // เอฟเฟกต์เพิ่มเติม
     }
 
     // เปลี่ยนชื่ออนิเมชันที่กำลังเล่น

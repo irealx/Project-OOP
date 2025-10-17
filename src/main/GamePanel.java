@@ -21,6 +21,11 @@ import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import javax.swing.JTextField;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DocumentFilter;
 import system.Config;
 import system.Door;
 import system.Level;
@@ -37,6 +42,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private final List<Monster> monsters = Monster.createDefaultMonsters();
     private final List<Level> levels = new ArrayList<>();
     private final Puzzle puzzle = new Puzzle();
+    private final GameMenu menu = new GameMenu();
 
     private BufferedImage background;
     private int width = Config.PANEL_WIDTH;
@@ -45,6 +51,7 @@ public class GamePanel extends JPanel implements ActionListener {
     private int levelIndex;
     private Integer pendingReset;
     private Level.DoorHit activeDoor;
+    private boolean showMenu = true;
 
     public GamePanel() {
         setFocusable(true);
@@ -74,6 +81,13 @@ public class GamePanel extends JPanel implements ActionListener {
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+                if (showMenu) {
+                    if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                        showMenu = false;
+                        requestFocusInWindow();
+                    }
+                    return;
+                }
                 // ถ้าอยู่ใน puzzle และกดปุ่มเคลื่อนที่ จะออกจากหน้าพัซเซิล
                 if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE && isMovementKey(e.getKeyCode())) {
                     closeInteraction(levels.get(levelIndex));
@@ -165,6 +179,10 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // แสดง overlay ของ Puzzle เมื่อชนประตูพัซเซิล
     private void renderOverlays(Graphics2D g2) {
+        if (showMenu) {
+            menu.draw(g2, width, height);
+            return;
+        }
         if (activeDoor != null && activeDoor.type() == Door.Type.PUZZLE) {
             puzzle.draw(g2, width, height);
         }
@@ -172,6 +190,7 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // วาด UI ด้านบน เช่น ชื่อเลเวล
     private void renderUI(Graphics2D g2) {
+        if (showMenu) return;
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 20));
         g2.drawString("Level " + (levelIndex + 1), 20, 30);
@@ -180,6 +199,11 @@ public class GamePanel extends JPanel implements ActionListener {
     // ลูปหลักของเกม เรียกทุกครั้งเมื่อ Timer ทำงาน
     @Override
     public void actionPerformed(ActionEvent e) {
+        if (showMenu) {
+            repaint();
+            return;
+        }
+
         Level level = levels.get(levelIndex);
         level.getDoors().forEach(Door::updateAnimation);
 
@@ -233,9 +257,7 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // กล่องใส่รหัสผ่านเมื่อชนประตูไปต่อ/ย้อนกลับ
     private void promptPassword(Level level, DoorHit hit) {
-        String input = JOptionPane.showInputDialog(
-                this, "Please enter password", "รหัสประตู", JOptionPane.QUESTION_MESSAGE
-        );
+        String input = showNumericInputDialog("Please enter password", "รหัสประตู");
 
         if (level.validatePassword(input)) {
             int next = hit.type() == Door.Type.ADVANCE
@@ -256,6 +278,65 @@ public class GamePanel extends JPanel implements ActionListener {
             );
         }
         closeInteraction(level);
+    }
+
+    // แสดงกล่องกรอกข้อมูลที่รับเฉพาะตัวเลขเท่านั้น ถ้า Cancel จะคืนค่าเป็น null
+    private String showNumericInputDialog(String message, String title) {
+        JTextField field = new JTextField();
+        field.setColumns(6);
+        ((AbstractDocument) field.getDocument()).setDocumentFilter(new DigitsOnlyFilter());
+
+        while (true) {
+            int option = JOptionPane.showConfirmDialog(
+                    this,
+                    new Object[]{message, field},
+                    title,
+                    JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.QUESTION_MESSAGE
+            );
+
+            if (option != JOptionPane.OK_OPTION) {
+                return null;
+            }
+
+            String text = field.getText();
+            if (text != null && !text.isBlank()) {
+                return text.trim();
+            }
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "กรุณากรอกตัวเลขก่อนกดตกลง",
+                    "ข้อมูลไม่ครบถ้วน",
+                    JOptionPane.WARNING_MESSAGE
+            );
+        }
+    }
+
+    // DocumentFilter สำหรับยอมให้พิมพ์เฉพาะตัวเลข 0-9
+    private static class DigitsOnlyFilter extends DocumentFilter {
+        @Override
+        public void insertString(FilterBypass fb, int offset, String string, AttributeSet attr) throws BadLocationException {
+            if (string == null || string.isEmpty() || isNumeric(string)) {
+                super.insertString(fb, offset, string, attr);
+            }
+        }
+
+        @Override
+        public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs) throws BadLocationException {
+            if (text == null || text.isEmpty() || isNumeric(text)) {
+                super.replace(fb, offset, length, text, attrs);
+            }
+        }
+
+        private boolean isNumeric(String text) {
+            for (int i = 0; i < text.length(); i++) {
+                if (!Character.isDigit(text.charAt(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     // ปิดหน้าพัซเซิล / กลับเข้าสู่การควบคุมปกติ

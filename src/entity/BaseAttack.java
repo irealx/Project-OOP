@@ -66,4 +66,9 @@ abstract class BaseAttack<T extends BaseAttack.State> implements Monster.AttackB
     protected final void markCooldown(T data) {
         data.lastActionTime = System.currentTimeMillis();
     }
+
+    // markCooldownWithDelay — ปรับเวลาเริ่มคูลดาวน์ให้มีดีเลย์ตามต้องการ
+    protected final void markCooldownWithDelay(T data, long cooldownMs, long delayMs) {
+        data.lastActionTime = System.currentTimeMillis() - (cooldownMs - delayMs);
+    }
 }

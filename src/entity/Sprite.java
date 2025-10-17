@@ -148,4 +148,9 @@ public abstract class Sprite {
     public int getCenterY() { return y + size / 2; }
     public int getSize() { return size; }
     public int getSpeed() { return speed; }
+    
+    // ระยะห่างกำลังสองจากจุดศูนย์กลางไปยังเป้าหมาย (ใช้ช่วยคำนวณโดยไม่ต้องถอดรูท)
+    protected int distanceSquaredTo(int targetX, int targetY) {
+        return Utils.distanceSquared(getCenterX(), getCenterY(), targetX, targetY);
+    }
 }

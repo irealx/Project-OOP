@@ -4,7 +4,9 @@ import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import javax.xml.crypto.Data;
 import system.Level;
+import static system.Config.*;
 
 // ShootAttack — มอนสเตอร์ยิงพลังงานกระจายสามทิศพร้อมเอฟเฟกต์กระสุน
 public class ShootAttack extends BaseAttack<ShootAttack.State> {
@@ -18,43 +20,23 @@ public class ShootAttack extends BaseAttack<ShootAttack.State> {
     }
 
     @Override
+    protected State createState() {
+        return new State();
+    }
+
+    @Override
     public void attack(Monster self, Player player, Level level) {
-        Data data = state(self);
-
-        // อัปเดตกระสุนก่อนเสมอ
+        State data = state(self);
         updateProjectiles(data, player, self);
-
-        if (player == null) {
-            switchAnimation(self, data, "idle");
-            data.attacking = false;
-            return;
-        }
-
-        if (data.attacking) {
-            // ระหว่างร่ายให้ยืนกับที่
-            self.setVelocity(0, 0);
-            handleCasting(self, player, data);
-            return;
-        }
-
+        if (player == null) { stopCasting(self, data); return; }
+        if (data.attacking) { handleCasting(self, player, data); return; }
         switchAnimation(self, data, "idle");
 
-        // เคลื่อนเข้าหาผู้เล่น
         self.follow(player.getX(), player.getY());
 
-        long now = System.currentTimeMillis();
-        if (now - data.lastShotTime < SHOOT_COOLDOWN_TICKS * TIMER_DELAY_MS) return;
-
-        int dx = player.getCenterX() - self.getCenterX();
-        int dy = player.getCenterY() - self.getCenterY();
-        if (dx * dx + dy * dy > WARP_RANGE * WARP_RANGE) return;
-
-        // เริ่มเล่นแอนิเมชัน summon.png
-        data.attacking = true;
-        data.fired = false;
-        data.frameIndex = data.frameTimer = 0;
-        data.animationFinished = false;
-        switchAnimation(self, data, "summon");
+        if (!cooldownReady(data, COOLDOWN_MS)) return;
+        if (!withinRange(self, player)) return;
+        beginSummon(self, data);
     }
 
     @Override
@@ -73,73 +55,58 @@ public class ShootAttack extends BaseAttack<ShootAttack.State> {
 
     @Override
     public void reset(Monster self) {
-        Data data = state(self);
-        data.attacking = false;
-        data.fired = false;
-        data.frameIndex = data.frameTimer = 0;
-        data.animationFinished = false;
+        State data = state(self);
+        stopCasting(self, data);
         data.projectiles.clear();
-        data.lastShotTime = System.currentTimeMillis();
+        markCooldownWithDelay(data, COOLDOWN_MS, 2000);
         switchAnimation(self, data, "idle");
     }
 
     // ===== ระหว่างกำลังร่าย summon =====
-    private void handleCasting(Monster self, Player player, Data data) {
+    private void handleCasting(Monster self, Player player, State data) {
+        self.setVelocity(0, 0);
+        switchAnimation(self, data, "summon");
         if (!data.fired && data.frameIndex >= SUMMON_FRAMES - 1) {
             // ยิงกระสุน 3 ทิศเมื่อถึงเฟรมสุดท้าย
             fireProjectiles(self, player, data);
             data.fired = true;
-            data.lastShotTime = System.currentTimeMillis();
+            markCooldown(data);
         }
-
-        if (advanceAnimation(data, SUMMON_FRAMES)) {
-            // เมื่อเล่นครบ → กลับไป idle
-            data.attacking = false;
-            switchAnimation(self, data, "idle");
-        }
+        if (!advanceAnimation(data, SUMMON_FRAMES)) return;
+        data.attacking = false;
+        switchAnimation(self, data, "idle");
     }
 
-    private Data state(Monster self) {
-        return states.computeIfAbsent(self, s -> new Data());
+    private void beginSummon(Monster self, State data) {
+        data.attacking = true;
+        data.fired = false;
+        resetAnimationState(data);
+        switchAnimation(self, data, "summon");
     }
 
-    private void switchAnimation(Monster self, Data data, String animation) {
-        if (!animation.equals(data.currentAnim)) {
-            self.setAnimation(animation);
-            data.currentAnim = animation;
-        }
+    private void stopCasting(Monster self, State data) {
+        data.attacking = false;
+        data.fired = false;
+        resetAnimationState(data);
+        switchAnimation(self, data, "idle");
     }
 
-    private boolean advanceAnimation(Data data, int totalFrames) {
-        if (data.animationFinished) return true;
-
-        if (++data.frameTimer >= FRAME_DELAY_MONSTER) {
-            data.frameTimer = 0;
-            data.frameIndex++;
-            if (data.frameIndex >= totalFrames) {
-                data.frameIndex = totalFrames - 1;
-                data.animationFinished = true;
-            }
-        }
-        return data.animationFinished;
-    }
-
-    private void updateProjectiles(Data data, Player player, Monster self) {
-        Iterator<Projectile> it = data.projectiles.iterator();
-        while (it.hasNext()) {
-            Projectile projectile = it.next();
+    private void updateProjectiles(State data, Player player, Monster self) {
+        Iterator<Projectile> iterator = data.projectiles.iterator();
+        while (iterator.hasNext()) {
+            Projectile projectile = iterator.next();
             projectile.update(player, self.panelWidth, self.panelHeight);
-            if (!projectile.isActive()) {
-                it.remove();
-            }
+            if (projectile.isActive()) continue;
+            iterator.remove();
         }
     }
 
-    private void fireProjectiles(Monster self, Player player, Data data) {
-        double baseAngle = Math.atan2(
-                player.getCenterY() - self.getCenterY(),
-                player.getCenterX() - self.getCenterX());
+    private boolean withinRange(Monster self, Player player) {
+        return self.distanceSquaredTo(player.getCenterX(), player.getCenterY()) <= WARP_RANGE * WARP_RANGE;
+    }
 
+    private void fireProjectiles(Monster self, Player player, State data) {
+        double baseAngle = Math.atan2(player.getCenterY() - self.getCenterY(), player.getCenterX() - self.getCenterX());
         for (int angleOffset : new int[]{-15, 0, 15}) {
             double angle = baseAngle + Math.toRadians(angleOffset);
             Projectile projectile = new Projectile(

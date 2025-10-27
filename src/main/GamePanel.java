@@ -36,13 +36,13 @@ import system.Puzzle;
 // จัดการลูปเกมหลัก การวาดภาพ และตรรกะการชนทั้งหมด
 public class GamePanel extends JPanel implements ActionListener {
 
-    private final Random random = new Random();
-
     private final Player player = new Player();
     private final List<Monster> monsters = Monster.createDefaultMonsters();
     private final List<Level> levels = new ArrayList<>();
     private final Puzzle puzzle = new Puzzle();
     private final GameMenu menu = new GameMenu();
+
+    private final Random random = new Random();
 
     private BufferedImage background;
     private int width = Config.PANEL_WIDTH;

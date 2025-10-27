@@ -4,7 +4,6 @@ import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import javax.xml.crypto.Data;
 import system.Level;
 import static system.Config.*;
 

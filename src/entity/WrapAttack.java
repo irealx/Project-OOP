@@ -5,10 +5,6 @@ import system.Utils;
 
 import static system.Config.*;
 
-import java.util.WeakHashMap;
-
-import javax.xml.crypto.Data;
-
 // WrapAttack — มอนสเตอร์วาร์ปอ้อมหลังผู้เล่นก่อนโผล่มาไล่ต่อ
 public class WrapAttack extends BaseAttack<WrapAttack.State> {
     private enum Stage { IDLE, CHARGE, WAIT, RECOVER }

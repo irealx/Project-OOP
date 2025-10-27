@@ -26,11 +26,6 @@ public abstract class Sprite {
     private BufferedImage frame;
     private Color fallbackColor = Color.WHITE;
 
-    protected Sprite(int size, int speed) {
-        this.size = size;
-        this.speed = speed;
-    }
-
     // ตั้งค่าภาพและสีสำรอง
     public void setFrame(BufferedImage frame, Color fallback) {
         this.frame = frame;
@@ -44,6 +39,11 @@ public abstract class Sprite {
         clamp();
     }
 
+    protected Sprite(int size, int speed) {
+        this.size = size;
+        this.speed = speed;
+    }
+    
     // ตั้งตำแหน่งใหม่โดยบังคับให้อยู่ในขอบเขต
     protected void setPosition(int nx, int ny) {
         x = nx;

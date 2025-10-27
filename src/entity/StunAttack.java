@@ -3,15 +3,12 @@ package entity;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.util.WeakHashMap;
-
-import javax.xml.crypto.Data;
 
 import system.Config;
 import system.Utils;
 
 // StunAttack — มอนสเตอร์ช็อตกระจายเป็นวงเพื่อหยุดผู้เล่นชั่วคราว
-class StunAttack extends BaseAttack<StunAttack.State> {
+public class StunAttack extends BaseAttack<StunAttack.State> {
     private static final int CAST_DELAY = 6;
     private static final int SKILL_FRAMES = Math.max(1, Monster.gMonsterAnimator().get("skill1").length);
     private static final long COOLDOWN_MS = Config.STUN_COOLDOWN * Config.TIMER_DELAY_MS;
